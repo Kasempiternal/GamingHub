@@ -14,6 +14,7 @@ import {
   PlayerList,
   RulesModal,
   HelpButton,
+  QRCode,
 } from '@/components/the-mind';
 import { TelepathyBackground, SyncPulse } from '@/components/themes';
 import type { TheMindPlayer } from '@/types/game';
@@ -104,41 +105,58 @@ export default function TheMindRoom() {
           animate={{ opacity: 1 }}
           className="flex-1 flex flex-col items-center justify-center"
         >
-          <div className="text-6xl mb-4">🧠</div>
-          <h2 className="text-2xl font-bold text-white mb-2">The Mind</h2>
-          <p className="text-slate-400 mb-6">Esperando jugadores...</p>
+          <motion.div
+            className="text-6xl mb-4 relative"
+            animate={{
+              boxShadow: [
+                '0 0 20px rgba(14, 165, 233, 0.3)',
+                '0 0 40px rgba(14, 165, 233, 0.5)',
+                '0 0 20px rgba(14, 165, 233, 0.3)'
+              ]
+            }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            🧠
+          </motion.div>
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-sky-400 to-emerald-400 bg-clip-text text-transparent mb-2">The Mind</h2>
+          <p className="text-sky-400/60 mb-6">Esperando conexion mental...</p>
 
           {/* Players */}
-          <div className="w-full max-w-sm mb-8">
-            <div className="bg-slate-800/50 rounded-xl p-4">
-              <div className="text-slate-400 text-sm mb-3">
-                Jugadores ({game.players.length}/4)
+          <div className="w-full max-w-sm mb-6">
+            <div className="bg-slate-800/50 rounded-xl p-4 border border-sky-500/20">
+              <div className="text-sky-400/60 text-sm mb-3 uppercase tracking-wider">
+                Mentes Conectadas ({game.players.length}/4)
               </div>
               <div className="space-y-2">
                 {game.players.map((player) => (
-                  <div
+                  <motion.div
                     key={player.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                      player.id === playerId ? 'bg-sky-500/20' : 'bg-slate-700/50'
+                      player.id === playerId ? 'bg-sky-500/20 border border-sky-500/30' : 'bg-slate-700/50'
                     }`}
                   >
-                    <span className="text-white">
+                    <span className="text-white flex items-center gap-2">
+                      <span className="text-sky-400">∿</span>
                       {player.name}
                       {player.isHost && ' 👑'}
                       {player.id === playerId && ' (Tu)'}
                     </span>
-                  </div>
+                    <motion.div
+                      className="w-2 h-2 rounded-full bg-emerald-400"
+                      animate={{ opacity: [1, 0.3, 1] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    />
+                  </motion.div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Share code */}
-          <div className="text-center mb-8">
-            <p className="text-slate-400 text-sm mb-2">Comparte el codigo:</p>
-            <div className="text-4xl font-mono font-bold text-white tracking-widest">
-              {game.roomCode}
-            </div>
+          {/* QR Code */}
+          <div className="w-full max-w-sm mb-6">
+            <QRCode roomCode={game.roomCode} />
           </div>
 
           {/* Start button */}
@@ -148,21 +166,24 @@ export default function TheMindRoom() {
               whileTap={{ scale: 0.98 }}
               onClick={startGame}
               disabled={loading}
-              className="px-8 py-4 bg-gradient-to-r from-sky-500 to-emerald-500 rounded-xl text-white font-bold text-lg"
+              className="px-8 py-4 bg-gradient-to-r from-sky-500 to-emerald-500 rounded-xl text-white font-bold text-lg flex items-center gap-2"
             >
-              Iniciar Juego
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Sincronizar Mentes
             </motion.button>
           )}
 
           {isHost && game.players.length < 2 && (
             <p className="text-amber-400 text-sm">
-              Se necesitan al menos 2 jugadores
+              Se necesitan al menos 2 mentes conectadas
             </p>
           )}
 
           {!isHost && (
-            <p className="text-slate-400 text-sm">
-              Esperando a que el host inicie...
+            <p className="text-sky-400/60 text-sm">
+              Esperando al host para iniciar la sincronizacion...
             </p>
           )}
         </motion.div>

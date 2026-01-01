@@ -6,3 +6,4 @@ export { ShurikenButton } from './ShurikenButton';
 export { PlayedPile } from './PlayedPile';
 export { PlayerList } from './PlayerList';
 export { RulesModal, HelpButton } from './RulesModal';
+export { QRCode } from './QRCode';

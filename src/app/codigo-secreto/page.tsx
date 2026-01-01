@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { TOTAL_WORDS } from '@/data/words';
 import { RulesModal, RulesButton } from '@/components/codigo-secreto';
+import { SpyBackground } from '@/components/themes';
 
 export default function CodigoSecretoHome() {
   const router = useRouter();
@@ -87,103 +88,131 @@ export default function CodigoSecretoHome() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom">
-      {/* Background decoration */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-10 left-10 w-32 h-32 bg-red-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-10 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl"></div>
-      </div>
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
+      {/* Spy Theme Background */}
+      <SpyBackground />
 
       <div className="relative z-10 w-full max-w-md">
         {/* Back to hub */}
-        <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors">
+        <Link href="/" className="inline-flex items-center gap-2 text-amber-400/70 hover:text-amber-300 mb-6 transition-colors">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
           Volver al Hub
         </Link>
 
-        {/* Logo and title */}
+        {/* Logo and title - Spy themed */}
         <motion.div
           className="text-center mb-8"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-red-500 to-blue-500 rounded-2xl mb-4 shadow-2xl">
-            <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-2">
+          {/* Classified badge */}
+          <motion.div
+            className="inline-block mb-4"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
+            <div className="relative">
+              <div className="w-20 h-20 bg-gradient-to-br from-amber-600 to-amber-800 rounded-2xl flex items-center justify-center shadow-2xl border-2 border-amber-500/30">
+                <motion.span
+                  className="text-4xl"
+                  animate={{ rotate: [0, -5, 5, 0] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  🕵️
+                </motion.span>
+              </div>
+              {/* TOP SECRET stamp */}
+              <motion.div
+                className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] font-bold px-2 py-0.5 rounded rotate-12"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                TOP SECRET
+              </motion.div>
+            </div>
+          </motion.div>
+
+          <h1 className="text-4xl font-bold text-amber-100 mb-2 tracking-tight">
             Codigo Secreto
           </h1>
-          <p className="text-slate-400">
-            Juego de espias y palabras
+          <p className="text-amber-400/60 font-medium">
+            Operacion clasificada - Nivel 5
           </p>
-          <p className="text-slate-500 text-sm mt-1">
-            {TOTAL_WORDS}+ palabras disponibles
+          <p className="text-amber-500/40 text-sm mt-1">
+            {TOTAL_WORDS}+ palabras en la base de datos
           </p>
         </motion.div>
 
-        {/* Main content card */}
+        {/* Main content card - Classified document style */}
         <motion.div
-          className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-slate-700/50"
+          className="bg-slate-900/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-amber-600/30 relative overflow-hidden"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
+          {/* Classified watermark */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]">
+            <span className="text-amber-400 text-6xl font-black rotate-[-15deg]">CLASSIFIED</span>
+          </div>
+
           {mode === 'home' && (
-            <div className="space-y-4">
-              <button
+            <div className="space-y-4 relative">
+              <motion.button
                 onClick={() => setMode('create')}
-                className="w-full py-4 px-6 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold rounded-xl transition-all transform hover:scale-[1.02] shadow-lg"
+                className="w-full py-4 px-6 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-semibold rounded-xl transition-all shadow-lg border border-amber-500/30"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
                 <span className="flex items-center justify-center gap-2">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  Crear Nueva Partida
+                  Iniciar Nueva Mision
                 </span>
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
                 onClick={() => setMode('join')}
-                className="w-full py-4 px-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl transition-all transform hover:scale-[1.02] shadow-lg"
+                className="w-full py-4 px-6 bg-slate-800/80 hover:bg-slate-700/80 text-amber-300 font-semibold rounded-xl transition-all border border-amber-600/30"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
                 <span className="flex items-center justify-center gap-2">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                   </svg>
-                  Unirse a Partida
+                  Unirse a Mision
                 </span>
-              </button>
+              </motion.button>
 
-              {/* How to play */}
-              <div className="mt-6 pt-6 border-t border-slate-700">
-                <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              {/* Mission briefing */}
+              <div className="mt-6 pt-6 border-t border-amber-600/20">
+                <h3 className="text-amber-300 font-semibold mb-3 flex items-center gap-2 text-sm uppercase tracking-wider">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  Como se juega?
+                  Informe de Mision
                 </h3>
-                <ul className="text-sm text-slate-400 space-y-2">
+                <ul className="text-sm text-amber-100/60 space-y-2">
                   <li className="flex items-start gap-2">
-                    <span className="text-red-400">-</span>
-                    Dos equipos compiten: <span className="text-red-400">Rojo</span> vs <span className="text-blue-400">Azul</span>
+                    <span className="text-red-400">▸</span>
+                    Equipo <span className="text-red-400 font-medium">Rojo</span> vs Equipo <span className="text-blue-400 font-medium">Azul</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-yellow-400">-</span>
-                    Cada equipo tiene un <span className="text-yellow-400">Jefe de Espias</span>
+                    <span className="text-amber-400">▸</span>
+                    Cada equipo tiene un <span className="text-amber-300 font-medium">Jefe de Espias</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-green-400">-</span>
-                    El Jefe da pistas de una palabra + numero
+                    <span className="text-green-400">▸</span>
+                    Descifra las palabras con pistas secretas
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-purple-400">-</span>
-                    Evita al <span className="text-slate-300">Asesino</span> o pierdes!
+                    <span className="text-slate-400">▸</span>
+                    Evita al <span className="text-slate-300 font-medium">Asesino</span> a toda costa
                   </li>
                 </ul>
               </div>
@@ -191,10 +220,10 @@ export default function CodigoSecretoHome() {
           )}
 
           {mode === 'create' && (
-            <div className="space-y-4">
+            <div className="space-y-4 relative">
               <button
                 onClick={() => { setMode('home'); setError(''); }}
-                className="text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+                className="text-amber-400/70 hover:text-amber-300 transition-colors flex items-center gap-1"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -202,48 +231,65 @@ export default function CodigoSecretoHome() {
                 Volver
               </button>
 
-              <h2 className="text-xl font-semibold text-white">Crear Nueva Partida</h2>
+              <h2 className="text-xl font-semibold text-amber-100 flex items-center gap-2">
+                <span className="text-amber-500">📋</span>
+                Crear Nueva Mision
+              </h2>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-2">Tu nombre</label>
+                <label className="block text-sm text-amber-400/60 mb-2 uppercase tracking-wider">Nombre Clave del Agente</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej: Agente 007"
+                  placeholder="Ej: Agente Shadow"
                   maxLength={20}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition-colors"
+                  className="w-full px-4 py-3 bg-slate-800/80 border border-amber-600/30 rounded-xl text-amber-100 placeholder-amber-500/30 focus:outline-none focus:border-amber-500 transition-colors"
                 />
               </div>
 
               {error && (
-                <p className="text-red-400 text-sm">{error}</p>
+                <p className="text-red-400 text-sm flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {error}
+                </p>
               )}
 
-              <button
+              <motion.button
                 onClick={handleCreate}
                 disabled={loading}
-                className="w-full py-3 px-6 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 px-6 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 border border-amber-500/30"
+                whileHover={{ scale: loading ? 1 : 1.02 }}
+                whileTap={{ scale: loading ? 1 : 0.98 }}
               >
                 {loading ? (
                   <>
-                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Creando...
+                    <motion.div
+                      className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    />
+                    Iniciando mision...
                   </>
                 ) : (
-                  'Crear Partida'
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Iniciar Mision
+                  </>
                 )}
-              </button>
+              </motion.button>
             </div>
           )}
 
           {mode === 'join' && (
-            <div className="space-y-4">
+            <div className="space-y-4 relative">
               <button
                 onClick={() => { setMode('home'); setError(''); }}
-                className="text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+                className="text-amber-400/70 hover:text-amber-300 transition-colors flex items-center gap-1"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -251,58 +297,75 @@ export default function CodigoSecretoHome() {
                 Volver
               </button>
 
-              <h2 className="text-xl font-semibold text-white">Unirse a Partida</h2>
+              <h2 className="text-xl font-semibold text-amber-100 flex items-center gap-2">
+                <span className="text-amber-500">🔐</span>
+                Acceso a Mision
+              </h2>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-2">Tu nombre</label>
+                <label className="block text-sm text-amber-400/60 mb-2 uppercase tracking-wider">Nombre Clave del Agente</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej: Agente 007"
+                  placeholder="Ej: Agente Shadow"
                   maxLength={20}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 bg-slate-800/80 border border-amber-600/30 rounded-xl text-amber-100 placeholder-amber-500/30 focus:outline-none focus:border-amber-500 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-2">Codigo de sala</label>
+                <label className="block text-sm text-amber-400/60 mb-2 uppercase tracking-wider">Codigo de Acceso</label>
                 <input
                   type="text"
                   value={roomCode}
                   onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                   placeholder="XXXXXX"
                   maxLength={6}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors text-center text-2xl tracking-widest font-mono uppercase"
+                  className="w-full px-4 py-3 bg-slate-800/80 border border-amber-600/30 rounded-xl text-amber-100 placeholder-amber-500/30 focus:outline-none focus:border-amber-500 transition-colors text-center text-2xl tracking-[0.3em] font-mono uppercase"
                 />
               </div>
 
               {error && (
-                <p className="text-red-400 text-sm">{error}</p>
+                <p className="text-red-400 text-sm flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {error}
+                </p>
               )}
 
-              <button
+              <motion.button
                 onClick={handleJoin}
                 disabled={loading}
-                className="w-full py-3 px-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 px-6 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 border border-amber-500/30"
+                whileHover={{ scale: loading ? 1 : 1.02 }}
+                whileTap={{ scale: loading ? 1 : 0.98 }}
               >
                 {loading ? (
                   <>
-                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Uniendose...
+                    <motion.div
+                      className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    />
+                    Verificando acceso...
                   </>
                 ) : (
-                  'Unirse'
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                    </svg>
+                    Acceder a Mision
+                  </>
                 )}
-              </button>
+              </motion.button>
             </div>
           )}
         </motion.div>
 
         {/* Footer */}
-        <p className="text-center text-slate-500 text-sm mt-6">
+        <p className="text-center text-amber-500/30 text-sm mt-6">
           Basado en Codenames de Vlaada Chvatil
         </p>
       </div>
