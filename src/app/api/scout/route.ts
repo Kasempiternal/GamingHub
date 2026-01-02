@@ -1,9 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kv } from '@vercel/kv';
 import type { ScoutGameState, ScoutPlayer, ScoutCard, ScoutCurrentPlay, ScoutRound, ScoutRoundScore, ScoutPlayType } from '@/types/game';
 import { SCOUT_DECK, SCOUT_CONFIG } from '@/types/game';
 
-// In-memory storage
-const games = new Map<string, ScoutGameState>();
+// KV storage helpers with 24-hour TTL
+const GAME_TTL = 60 * 60 * 24; // 24 hours in seconds
+const getGameKey = (roomCode: string) => `scout:${roomCode.toUpperCase()}`;
+
+async function getGame(roomCode: string): Promise<ScoutGameState | null> {
+  try {
+    return await kv.get<ScoutGameState>(getGameKey(roomCode));
+  } catch (error) {
+    console.error('KV get error:', error);
+    return null;
+  }
+}
+
+async function setGame(roomCode: string, game: ScoutGameState): Promise<void> {
+  try {
+    await kv.set(getGameKey(roomCode), game, { ex: GAME_TTL });
+  } catch (error) {
+    console.error('KV set error:', error);
+  }
+}
+
+async function deleteGame(roomCode: string): Promise<void> {
+  try {
+    await kv.del(getGameKey(roomCode));
+  } catch (error) {
+    console.error('KV delete error:', error);
+  }
+}
 
 // Generate 4-character room code
 function generateRoomCode(): string {
@@ -180,7 +207,7 @@ function getNextPlayerIndex(game: ScoutGameState): number {
 }
 
 // Create new game
-function createGame(playerName: string): { game: ScoutGameState; playerId: string } {
+async function createGame(playerName: string): Promise<{ game: ScoutGameState; playerId: string }> {
   const roomCode = generateRoomCode();
   const playerId = generatePlayerId();
 
@@ -214,13 +241,13 @@ function createGame(playerName: string): { game: ScoutGameState; playerId: strin
     lastAction: null,
   };
 
-  games.set(roomCode, game);
+  await setGame(roomCode, game);
   return { game, playerId };
 }
 
 // Join game
-function joinGame(roomCode: string, playerName: string): { game: ScoutGameState; playerId: string } | null {
-  const game = games.get(roomCode.toUpperCase());
+async function joinGame(roomCode: string, playerName: string): Promise<{ game: ScoutGameState; playerId: string } | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'lobby') return null;
   if (game.players.length >= 5) return null;
 
@@ -240,24 +267,26 @@ function joinGame(roomCode: string, playerName: string): { game: ScoutGameState;
   game.players.push(player);
   game.lastActivity = Date.now();
 
+  await setGame(roomCode, game);
   return { game, playerId };
 }
 
 // Rejoin game
-function rejoinGame(roomCode: string, playerId: string): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function rejoinGame(roomCode: string, playerId: string): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game) return null;
 
   const player = game.players.find(p => p.id === playerId);
   if (!player) return null;
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Start game
-function startGame(roomCode: string, playerId: string): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function startGame(roomCode: string, playerId: string): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game) return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -290,12 +319,13 @@ function startGame(roomCode: string, playerId: string): ScoutGameState | null {
   });
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Flip entire hand orientation
-function flipHand(roomCode: string, playerId: string): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function flipHand(roomCode: string, playerId: string): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'orientation') return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -308,12 +338,13 @@ function flipHand(roomCode: string, playerId: string): ScoutGameState | null {
   }));
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Confirm hand orientation
-function confirmHand(roomCode: string, playerId: string): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function confirmHand(roomCode: string, playerId: string): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'orientation') return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -327,12 +358,13 @@ function confirmHand(roomCode: string, playerId: string): ScoutGameState | null 
     game.phase = 'playing';
   }
 
+  await setGame(roomCode, game);
   return game;
 }
 
 // Show (play cards)
-function show(roomCode: string, playerId: string, cardIds: string[]): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function show(roomCode: string, playerId: string, cardIds: string[]): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'playing') return null;
 
   const playerIndex = game.players.findIndex(p => p.id === playerId);
@@ -391,12 +423,13 @@ function show(roomCode: string, playerId: string, cardIds: string[]): ScoutGameS
   }
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Scout (take a card from current play)
-function scout(roomCode: string, playerId: string, takeFromLeft: boolean, insertAtIndex: number): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function scout(roomCode: string, playerId: string, takeFromLeft: boolean, insertAtIndex: number): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'playing') return null;
   if (!game.currentPlay) return null;
 
@@ -459,12 +492,13 @@ function scout(roomCode: string, playerId: string, takeFromLeft: boolean, insert
   }
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Scout and Show (combo action, once per round)
-function scoutAndShow(roomCode: string, playerId: string, takeFromLeft: boolean, insertAtIndex: number, showCardIds: string[]): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function scoutAndShow(roomCode: string, playerId: string, takeFromLeft: boolean, insertAtIndex: number, showCardIds: string[]): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'playing') return null;
   if (!game.currentPlay) return null;
 
@@ -552,6 +586,7 @@ function scoutAndShow(roomCode: string, playerId: string, takeFromLeft: boolean,
   }
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
@@ -576,8 +611,8 @@ function endRound(game: ScoutGameState, roundEnderId: string): void {
 }
 
 // Start next round
-function nextRound(roomCode: string, playerId: string): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function nextRound(roomCode: string, playerId: string): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'roundEnd') return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -620,12 +655,13 @@ function nextRound(roomCode: string, playerId: string): ScoutGameState | null {
   }
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Reset game
-function resetGame(roomCode: string, playerId: string): ScoutGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function resetGame(roomCode: string, playerId: string): Promise<ScoutGameState | null> {
+  const game = await getGame(roomCode);
   if (!game) return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -652,6 +688,7 @@ function resetGame(roomCode: string, playerId: string): ScoutGameState | null {
   });
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
@@ -684,7 +721,7 @@ export async function POST(request: NextRequest) {
         if (!playerName) {
           return NextResponse.json({ success: false, error: 'Se requiere nombre de jugador' });
         }
-        const result = createGame(playerName);
+        const result = await createGame(playerName);
         return NextResponse.json({
           success: true,
           data: {
@@ -698,7 +735,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerName) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala y nombre' });
         }
-        const result = joinGame(roomCode, playerName);
+        const result = await joinGame(roomCode, playerName);
         if (!result) {
           return NextResponse.json({ success: false, error: 'No se pudo unir a la sala' });
         }
@@ -715,7 +752,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala y ID de jugador' });
         }
-        const game = rejoinGame(roomCode, playerId);
+        const game = await rejoinGame(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se encontro la sala' });
         }
@@ -729,7 +766,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala' });
         }
-        const game = games.get(roomCode.toUpperCase());
+        const game = await getGame(roomCode);
         if (!game) {
           return NextResponse.json({ success: false, error: 'Sala no encontrada' });
         }
@@ -743,7 +780,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala y ID de jugador' });
         }
-        const game = startGame(roomCode, playerId);
+        const game = await startGame(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo iniciar el juego' });
         }
@@ -757,7 +794,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = flipHand(roomCode, playerId);
+        const game = await flipHand(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo voltear la mano' });
         }
@@ -771,7 +808,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = confirmHand(roomCode, playerId);
+        const game = await confirmHand(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo confirmar la mano' });
         }
@@ -785,7 +822,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId || !cardIds || !Array.isArray(cardIds)) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = show(roomCode, playerId, cardIds);
+        const game = await show(roomCode, playerId, cardIds);
         if (!game) {
           return NextResponse.json({ success: false, error: 'Jugada no valida' });
         }
@@ -799,7 +836,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId || typeof takeFromLeft !== 'boolean' || typeof insertAtIndex !== 'number') {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = scout(roomCode, playerId, takeFromLeft, insertAtIndex);
+        const game = await scout(roomCode, playerId, takeFromLeft, insertAtIndex);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo hacer scout' });
         }
@@ -813,7 +850,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId || typeof takeFromLeft !== 'boolean' || typeof insertAtIndex !== 'number' || !showCardIds) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = scoutAndShow(roomCode, playerId, takeFromLeft, insertAtIndex, showCardIds);
+        const game = await scoutAndShow(roomCode, playerId, takeFromLeft, insertAtIndex, showCardIds);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo hacer scout & show' });
         }
@@ -827,7 +864,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = nextRound(roomCode, playerId);
+        const game = await nextRound(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo continuar' });
         }
@@ -841,7 +878,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = resetGame(roomCode, playerId);
+        const game = await resetGame(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo reiniciar' });
         }
@@ -869,7 +906,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Se requiere codigo de sala' });
   }
 
-  const game = games.get(roomCode.toUpperCase());
+  const game = await getGame(roomCode);
   if (!game) {
     return NextResponse.json({ success: false, error: 'Sala no encontrada' });
   }

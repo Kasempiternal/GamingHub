@@ -1,9 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kv } from '@vercel/kv';
 import type { TheMindGameState, TheMindPlayer, TheMindCard, TheMindLevel, TheMindPhase } from '@/types/game';
 import { THE_MIND_CONFIG } from '@/types/game';
 
-// In-memory storage (same pattern as other games)
-const games = new Map<string, TheMindGameState>();
+// KV storage helpers with 24-hour TTL
+const GAME_TTL = 60 * 60 * 24; // 24 hours in seconds
+const getGameKey = (roomCode: string) => `themind:${roomCode.toUpperCase()}`;
+
+async function getGame(roomCode: string): Promise<TheMindGameState | null> {
+  try {
+    return await kv.get<TheMindGameState>(getGameKey(roomCode));
+  } catch (error) {
+    console.error('KV get error:', error);
+    return null;
+  }
+}
+
+async function setGame(roomCode: string, game: TheMindGameState): Promise<void> {
+  try {
+    await kv.set(getGameKey(roomCode), game, { ex: GAME_TTL });
+  } catch (error) {
+    console.error('KV set error:', error);
+  }
+}
+
+async function deleteGame(roomCode: string): Promise<void> {
+  try {
+    await kv.del(getGameKey(roomCode));
+  } catch (error) {
+    console.error('KV delete error:', error);
+  }
+}
 
 // Generate room code
 function generateRoomCode(): string {
@@ -89,7 +116,7 @@ function getSanitizedGame(game: TheMindGameState, playerId?: string): TheMindGam
 }
 
 // Create new game
-function createGame(playerName: string): { game: TheMindGameState; playerId: string } {
+async function createGame(playerName: string): Promise<{ game: TheMindGameState; playerId: string }> {
   const roomCode = generateRoomCode();
   const playerId = generatePlayerId();
 
@@ -126,13 +153,13 @@ function createGame(playerName: string): { game: TheMindGameState; playerId: str
     shurikenRewardLevels: [],
   };
 
-  games.set(roomCode, game);
+  await setGame(roomCode, game);
   return { game, playerId };
 }
 
 // Join game
-function joinGame(roomCode: string, playerName: string): { game: TheMindGameState; playerId: string } | null {
-  const game = games.get(roomCode.toUpperCase());
+async function joinGame(roomCode: string, playerName: string): Promise<{ game: TheMindGameState; playerId: string } | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'lobby') return null;
   if (game.players.length >= 4) return null;
 
@@ -149,24 +176,26 @@ function joinGame(roomCode: string, playerName: string): { game: TheMindGameStat
   game.players.push(player);
   game.lastActivity = Date.now();
 
+  await setGame(roomCode, game);
   return { game, playerId };
 }
 
 // Rejoin game
-function rejoinGame(roomCode: string, playerId: string): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function rejoinGame(roomCode: string, playerId: string): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game) return null;
 
   const player = game.players.find(p => p.id === playerId);
   if (!player) return null;
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Start game
-function startGame(roomCode: string, playerId: string): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function startGame(roomCode: string, playerId: string): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game) return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -201,20 +230,17 @@ function startGame(roomCode: string, playerId: string): TheMindGameState | null 
 
   game.lastActivity = Date.now();
 
-  // Auto-transition to playing after short delay (handled client-side)
-  setTimeout(() => {
-    const g = games.get(roomCode.toUpperCase());
-    if (g && g.phase === 'dealing') {
-      g.phase = 'playing';
-    }
-  }, 2000);
+  await setGame(roomCode, game);
+
+  // Note: Auto-transition to playing is now handled by the 'ready' action
+  // which clients call after they've received their cards
 
   return game;
 }
 
 // Player ready (for synchronization before level starts)
-function playerReady(roomCode: string, playerId: string): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function playerReady(roomCode: string, playerId: string): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game) return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -228,12 +254,13 @@ function playerReady(roomCode: string, playerId: string): TheMindGameState | nul
     game.phase = 'playing';
   }
 
+  await setGame(roomCode, game);
   return game;
 }
 
 // Play a card
-function playCard(roomCode: string, playerId: string, cardValue: number): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function playCard(roomCode: string, playerId: string, cardValue: number): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'playing') return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -299,6 +326,7 @@ function playCard(roomCode: string, playerId: string, cardValue: number): TheMin
         currentLevelRecord.failed = true;
         currentLevelRecord.endedAt = Date.now();
       }
+      await setGame(roomCode, game);
       return game;
     }
 
@@ -308,6 +336,7 @@ function playCard(roomCode: string, playerId: string, cardValue: number): TheMin
       handleLevelComplete(game);
     }
 
+    await setGame(roomCode, game);
     return game;
   }
 
@@ -317,6 +346,7 @@ function playCard(roomCode: string, playerId: string, cardValue: number): TheMin
     handleLevelComplete(game);
   }
 
+  await setGame(roomCode, game);
   return game;
 }
 
@@ -343,8 +373,8 @@ function handleLevelComplete(game: TheMindGameState): void {
 }
 
 // Next level
-function nextLevel(roomCode: string, playerId: string): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function nextLevel(roomCode: string, playerId: string): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'levelComplete') return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -368,12 +398,13 @@ function nextLevel(roomCode: string, playerId: string): TheMindGameState | null 
 
   game.lastActivity = Date.now();
 
+  await setGame(roomCode, game);
   return game;
 }
 
 // Propose shuriken
-function proposeShuriken(roomCode: string, playerId: string): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function proposeShuriken(roomCode: string, playerId: string): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'playing' || game.shurikens <= 0) return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -428,12 +459,13 @@ function proposeShuriken(roomCode: string, playerId: string): TheMindGameState |
   }
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Cancel shuriken proposal
-function cancelShuriken(roomCode: string, playerId: string): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function cancelShuriken(roomCode: string, playerId: string): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game || game.phase !== 'playing') return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -446,12 +478,13 @@ function cancelShuriken(roomCode: string, playerId: string): TheMindGameState | 
   }
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
 // Reset game
-function resetGame(roomCode: string, playerId: string): TheMindGameState | null {
-  const game = games.get(roomCode.toUpperCase());
+async function resetGame(roomCode: string, playerId: string): Promise<TheMindGameState | null> {
+  const game = await getGame(roomCode);
   if (!game) return null;
 
   const player = game.players.find(p => p.id === playerId);
@@ -477,6 +510,7 @@ function resetGame(roomCode: string, playerId: string): TheMindGameState | null 
   });
 
   game.lastActivity = Date.now();
+  await setGame(roomCode, game);
   return game;
 }
 
@@ -491,7 +525,7 @@ export async function POST(request: NextRequest) {
         if (!playerName) {
           return NextResponse.json({ success: false, error: 'Se requiere nombre de jugador' });
         }
-        const result = createGame(playerName);
+        const result = await createGame(playerName);
         return NextResponse.json({
           success: true,
           data: {
@@ -505,7 +539,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerName) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala y nombre' });
         }
-        const result = joinGame(roomCode, playerName);
+        const result = await joinGame(roomCode, playerName);
         if (!result) {
           return NextResponse.json({ success: false, error: 'No se pudo unir a la sala' });
         }
@@ -522,7 +556,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala y ID de jugador' });
         }
-        const game = rejoinGame(roomCode, playerId);
+        const game = await rejoinGame(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se encontro la sala' });
         }
@@ -536,7 +570,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala' });
         }
-        const game = games.get(roomCode.toUpperCase());
+        const game = await getGame(roomCode);
         if (!game) {
           return NextResponse.json({ success: false, error: 'Sala no encontrada' });
         }
@@ -550,7 +584,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Se requiere codigo de sala y ID de jugador' });
         }
-        const game = startGame(roomCode, playerId);
+        const game = await startGame(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo iniciar el juego' });
         }
@@ -564,7 +598,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = playerReady(roomCode, playerId);
+        const game = await playerReady(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'Error al marcar listo' });
         }
@@ -578,7 +612,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId || cardValue === undefined) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = playCard(roomCode, playerId, cardValue);
+        const game = await playCard(roomCode, playerId, cardValue);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo jugar la carta' });
         }
@@ -592,7 +626,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = nextLevel(roomCode, playerId);
+        const game = await nextLevel(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo avanzar de nivel' });
         }
@@ -606,7 +640,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = proposeShuriken(roomCode, playerId);
+        const game = await proposeShuriken(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo proponer shuriken' });
         }
@@ -620,7 +654,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = cancelShuriken(roomCode, playerId);
+        const game = await cancelShuriken(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo cancelar propuesta' });
         }
@@ -634,7 +668,7 @@ export async function POST(request: NextRequest) {
         if (!roomCode || !playerId) {
           return NextResponse.json({ success: false, error: 'Datos incompletos' });
         }
-        const game = resetGame(roomCode, playerId);
+        const game = await resetGame(roomCode, playerId);
         if (!game) {
           return NextResponse.json({ success: false, error: 'No se pudo reiniciar' });
         }
@@ -662,7 +696,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Se requiere codigo de sala' });
   }
 
-  const game = games.get(roomCode.toUpperCase());
+  const game = await getGame(roomCode);
   if (!game) {
     return NextResponse.json({ success: false, error: 'Sala no encontrada' });
   }
