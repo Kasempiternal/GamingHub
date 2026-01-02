@@ -21,10 +21,10 @@ export function PlayingCard({
   onClick,
   delay = 0,
 }: PlayingCardProps) {
-  const sizeClasses = {
-    sm: 'w-12 h-16 text-lg',
-    md: 'w-16 h-22 text-2xl',
-    lg: 'w-20 h-28 text-3xl',
+  const sizeConfig = {
+    sm: { card: 'w-12 h-16', center: 'text-xl', corner: 'text-[8px]' },
+    md: { card: 'w-16 h-22', center: 'text-3xl', corner: 'text-[10px]' },
+    lg: { card: 'w-20 h-28', center: 'text-4xl', corner: 'text-xs' },
   };
 
   const getCardColor = () => {
@@ -38,6 +38,16 @@ export function PlayingCard({
     return 'from-rose-400 to-rose-600';
   };
 
+  const getAccentColor = () => {
+    if (isConflict) return 'border-red-300/40';
+    if (isPlayed) return 'border-slate-300/30';
+    if (value <= 20) return 'border-emerald-200/40';
+    if (value <= 40) return 'border-sky-200/40';
+    if (value <= 60) return 'border-amber-200/40';
+    if (value <= 80) return 'border-orange-200/40';
+    return 'border-rose-200/40';
+  };
+
   return (
     <motion.button
       initial={{ opacity: 0, scale: 0.5, rotateY: 180 }}
@@ -48,28 +58,53 @@ export function PlayingCard({
       onClick={isPlayable ? onClick : undefined}
       disabled={!isPlayable}
       className={`
-        ${sizeClasses[size]}
+        ${sizeConfig[size].card}
         relative rounded-xl font-bold
         bg-gradient-to-br ${getCardColor()}
         flex items-center justify-center
         shadow-lg
-        ${isPlayable ? 'cursor-pointer hover:shadow-xl' : 'cursor-default opacity-90'}
+        ${isPlayable ? 'cursor-pointer hover:shadow-xl hover:shadow-white/20' : 'cursor-default opacity-90'}
         ${isConflict ? 'animate-shake' : ''}
         transition-shadow duration-200
         select-none
+        overflow-hidden
       `}
     >
-      {/* Card pattern */}
-      <div className="absolute inset-1 rounded-lg border-2 border-white/20" />
+      {/* Card face background */}
+      <div className="absolute inset-[3px] rounded-lg bg-slate-900/90 backdrop-blur" />
 
-      {/* Number */}
-      <span className="text-white drop-shadow-lg">{value}</span>
+      {/* Inner decorative border */}
+      <div className={`absolute inset-[5px] rounded-md border-2 ${getAccentColor()}`} />
+
+      {/* Corner numbers - top left */}
+      <div className={`absolute top-1.5 left-1.5 ${sizeConfig[size].corner} text-white/90 font-bold leading-none`}>
+        {value}
+      </div>
+
+      {/* Corner numbers - bottom right (rotated) */}
+      <div className={`absolute bottom-1.5 right-1.5 ${sizeConfig[size].corner} text-white/90 font-bold leading-none rotate-180`}>
+        {value}
+      </div>
+
+      {/* Center number with decorative styling */}
+      <div className="relative z-10 flex flex-col items-center">
+        <span className={`${sizeConfig[size].center} font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-white/70 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]`}>
+          {value}
+        </span>
+      </div>
+
+      {/* Diamond decoration above and below center number */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white/30 rotate-45" />
+      <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white/30 rotate-45" />
+
+      {/* Subtle shine effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl pointer-events-none" />
 
       {/* Glow effect for playable cards */}
       {isPlayable && (
         <motion.div
-          className="absolute inset-0 rounded-xl bg-white/20"
-          animate={{ opacity: [0, 0.3, 0] }}
+          className="absolute inset-0 rounded-xl bg-gradient-to-t from-transparent via-white/10 to-white/20"
+          animate={{ opacity: [0, 0.5, 0] }}
           transition={{ duration: 2, repeat: Infinity }}
         />
       )}

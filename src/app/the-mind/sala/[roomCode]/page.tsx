@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -26,6 +26,11 @@ export default function TheMindRoom() {
   const [showRules, setShowRules] = useState(false);
   const [showConflict, setShowConflict] = useState(false);
   const [showSync, setShowSync] = useState(false);
+  const [cardPlayedNotification, setCardPlayedNotification] = useState<{playerName: string; cardValue: number} | null>(null);
+
+  // Track which conflicts we've already shown to avoid re-triggering
+  const shownConflictsRef = useRef<string>('');
+  const lastPlayedCardRef = useRef<number | null>(null);
 
   const {
     game,
@@ -50,14 +55,40 @@ export default function TheMindRoom() {
     }
   }, [roomCode, router]);
 
-  // Handle conflict animation
+  // Handle conflict animation - only show once per unique conflict
   useEffect(() => {
     if (game?.conflictCards && game.conflictCards.length > 0) {
-      setShowConflict(true);
-      const timer = setTimeout(() => setShowConflict(false), 3000);
-      return () => clearTimeout(timer);
+      const conflictKey = game.conflictCards.sort().join(',');
+      if (shownConflictsRef.current !== conflictKey) {
+        shownConflictsRef.current = conflictKey;
+        setShowConflict(true);
+        const timer = setTimeout(() => setShowConflict(false), 3000);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      // Reset when conflicts are cleared (new level)
+      shownConflictsRef.current = '';
     }
   }, [game?.conflictCards]);
+
+  // Handle card played notification
+  useEffect(() => {
+    if (game?.lastPlayedCard && game.lastPlayedBy && game.phase === 'playing') {
+      // Only show if this is a new card played
+      if (lastPlayedCardRef.current !== game.lastPlayedCard) {
+        lastPlayedCardRef.current = game.lastPlayedCard;
+        const player = game.players.find(p => p.id === game.lastPlayedBy);
+        if (player) {
+          setCardPlayedNotification({
+            playerName: player.name,
+            cardValue: game.lastPlayedCard,
+          });
+          const timer = setTimeout(() => setCardPlayedNotification(null), 2000);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [game?.lastPlayedCard, game?.lastPlayedBy, game?.phase, game?.players]);
 
   if (!game) {
     return (
@@ -408,6 +439,35 @@ export default function TheMindRoom() {
           )}
         </motion.div>
       )}
+
+      {/* Card played notification */}
+      <AnimatePresence>
+        {cardPlayedNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-40"
+          >
+            <div className="bg-slate-800/90 backdrop-blur-sm border border-sky-500/30 rounded-2xl px-6 py-3 shadow-2xl">
+              <div className="flex items-center gap-3">
+                <motion.div
+                  className="w-10 h-14 bg-gradient-to-br from-sky-400 to-emerald-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg"
+                  initial={{ rotateY: 180 }}
+                  animate={{ rotateY: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {cardPlayedNotification.cardValue}
+                </motion.div>
+                <div>
+                  <p className="text-sky-300 font-medium">{cardPlayedNotification.playerName}</p>
+                  <p className="text-slate-400 text-sm">ha jugado <span className="text-white font-bold">{cardPlayedNotification.cardValue}</span></p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Conflict overlay */}
       <AnimatePresence>
