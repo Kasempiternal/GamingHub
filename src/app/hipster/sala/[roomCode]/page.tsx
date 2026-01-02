@@ -1034,7 +1034,7 @@ export default function HipsterRoom() {
                     setBonusArtist('');
                     setBonusTitle('');
                   }}
-                  disabled={!bonusArtist.trim() && !bonusTitle.trim()}
+                  disabled={!bonusArtist.trim() || !bonusTitle.trim()}
                   className="flex-1 py-2 bg-purple-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Adivinar
