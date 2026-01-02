@@ -219,4 +219,113 @@ export const THE_MIND_CONFIG: Record<number, { lives: number; shurikens: number;
   4: { lives: 4, shurikens: 1, levels: 8, lifeRewards: [3, 6], shurikenRewards: [2, 5] },
 };
 
+// ============================================
+// SCOUT GAME TYPES
+// ============================================
+
+export type ScoutPhase = 'lobby' | 'orientation' | 'playing' | 'roundEnd' | 'gameEnd';
+export type ScoutPlayType = 'single' | 'set' | 'run';
+
+// Card with dual numbers (top and bottom)
+export interface ScoutCard {
+  id: string;
+  topValue: number;      // 1-10
+  bottomValue: number;   // 1-10
+  orientation: 'up' | 'down'; // Which value is currently active
+}
+
+export interface ScoutPlayer {
+  id: string;
+  name: string;
+  hand: ScoutCard[];           // Cards in hand (ORDER MATTERS - cannot rearrange!)
+  capturedCards: number;       // Count of cards captured from beating plays
+  scoutTokensReceived: number; // Tokens received when others scout from you
+  hasUsedScoutAndShow: boolean; // Can only use once per round
+  isHost: boolean;
+  hasConfirmedHand: boolean;   // Confirmed hand orientation at round start
+  hasPassed: boolean;          // Passed this turn cycle
+}
+
+// Current play on the table
+export interface ScoutCurrentPlay {
+  cards: ScoutCard[];          // The cards currently on the table
+  playerId: string;            // Who played them
+  playType: ScoutPlayType;     // single, set, or run
+  value: number;               // The effective value (highest for sets, lowest for runs)
+}
+
+// Round score
+export interface ScoutRoundScore {
+  playerId: string;
+  playerName: string;
+  capturedCards: number;       // +1 each
+  scoutTokens: number;         // +1 each
+  cardsRemaining: number;      // -1 each (except round ender)
+  isRoundEnder: boolean;       // No penalty for remaining cards
+  roundScore: number;          // Total for this round
+}
+
+// Full round record
+export interface ScoutRound {
+  roundNumber: number;
+  startingPlayerId: string;
+  scores: ScoutRoundScore[];
+  endedBy: string | null;      // Who ended the round (emptied hand or all passed)
+  startedAt: number;
+  endedAt: number | null;
+}
+
+export interface ScoutGameState {
+  roomCode: string;
+  phase: ScoutPhase;
+  players: ScoutPlayer[];
+  currentPlay: ScoutCurrentPlay | null;  // Current cards to beat
+  currentPlayerIndex: number;            // Whose turn it is
+  rounds: ScoutRound[];
+  currentRound: number;
+  totalRounds: number;                   // Equal to player count
+  totalScores: Record<string, number>;   // Cumulative scores per player
+  startingPlayerIndex: number;           // Rotates each round
+  passCount: number;                     // How many players have passed consecutively
+  createdAt: number;
+  lastActivity: number;
+  winner: string | null;                 // Player ID of winner
+  lastAction: {                          // For animations
+    type: 'show' | 'scout' | 'scoutAndShow' | null;
+    playerId: string | null;
+    timestamp: number;
+  } | null;
+}
+
+// SCOUT game configuration by player count
+export const SCOUT_CONFIG: Record<number, {
+  totalCards: number;
+  cardsPerPlayer: number;
+  removedCards: string; // Description of which cards to remove
+}> = {
+  3: { totalCards: 36, cardsPerPlayer: 12, removedCards: 'Remove all cards with 10' },
+  4: { totalCards: 44, cardsPerPlayer: 11, removedCards: 'Remove card with 9-10' },
+  5: { totalCards: 45, cardsPerPlayer: 9, removedCards: 'Use all 45 cards' },
+};
+
+// The 45 SCOUT cards (number pairs)
+// Each card has two numbers, one on each end
+export const SCOUT_DECK: Array<{ top: number; bottom: number }> = [
+  // All pairs from 1-10 where top <= bottom (45 total)
+  { top: 1, bottom: 1 }, { top: 1, bottom: 2 }, { top: 1, bottom: 3 }, { top: 1, bottom: 4 }, { top: 1, bottom: 5 },
+  { top: 1, bottom: 6 }, { top: 1, bottom: 7 }, { top: 1, bottom: 8 }, { top: 1, bottom: 9 }, { top: 1, bottom: 10 },
+  { top: 2, bottom: 2 }, { top: 2, bottom: 3 }, { top: 2, bottom: 4 }, { top: 2, bottom: 5 }, { top: 2, bottom: 6 },
+  { top: 2, bottom: 7 }, { top: 2, bottom: 8 }, { top: 2, bottom: 9 }, { top: 2, bottom: 10 },
+  { top: 3, bottom: 3 }, { top: 3, bottom: 4 }, { top: 3, bottom: 5 }, { top: 3, bottom: 6 }, { top: 3, bottom: 7 },
+  { top: 3, bottom: 8 }, { top: 3, bottom: 9 }, { top: 3, bottom: 10 },
+  { top: 4, bottom: 4 }, { top: 4, bottom: 5 }, { top: 4, bottom: 6 }, { top: 4, bottom: 7 }, { top: 4, bottom: 8 },
+  { top: 4, bottom: 9 }, { top: 4, bottom: 10 },
+  { top: 5, bottom: 5 }, { top: 5, bottom: 6 }, { top: 5, bottom: 7 }, { top: 5, bottom: 8 }, { top: 5, bottom: 9 }, { top: 5, bottom: 10 },
+  { top: 6, bottom: 6 }, { top: 6, bottom: 7 }, { top: 6, bottom: 8 }, { top: 6, bottom: 9 }, { top: 6, bottom: 10 },
+  { top: 7, bottom: 7 }, { top: 7, bottom: 8 }, { top: 7, bottom: 9 }, { top: 7, bottom: 10 },
+  { top: 8, bottom: 8 }, { top: 8, bottom: 9 }, { top: 8, bottom: 10 },
+  { top: 9, bottom: 9 }, { top: 9, bottom: 10 },
+  { top: 10, bottom: 10 },
+];
+
 export default {};

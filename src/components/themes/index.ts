@@ -12,3 +12,13 @@ export {
   VoteReveal,
   EjectionAnimation,
 } from './ImpostorBackground';
+
+// Circus/Scout Theme
+export {
+  CircusBackground,
+  CircusConfetti,
+  Spotlight,
+  ScoreBurst,
+  CurtainTransition,
+  CircusRing,
+} from './CircusBackground';

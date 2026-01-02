@@ -45,6 +45,19 @@ const games = [
     available: true,
     tagline: 'Entre nosotros',
   },
+  {
+    id: 'scout',
+    name: 'SCOUT',
+    description: 'Circo de las cartas. Juega sets y escaleras para capturar artistas rivales.',
+    icon: '🎪',
+    gradient: 'from-red-700 to-amber-500',
+    accentColor: 'circus',
+    players: '3-5',
+    duration: '20-30 min',
+    href: '/scout',
+    available: true,
+    tagline: 'El gran show',
+  },
 ];
 
 // Animated background with floating particles
@@ -152,6 +165,12 @@ function GameCard({ game, index }: { game: typeof games[0]; index: number }) {
       border: 'border-red-500/30',
       text: 'text-red-400',
       glow: 'shadow-red-500/20',
+    },
+    circus: {
+      bg: 'bg-amber-600/10',
+      border: 'border-amber-600/30',
+      text: 'text-amber-500',
+      glow: 'shadow-amber-600/20',
     },
   };
 
@@ -345,7 +364,7 @@ export default function Home() {
             animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="text-white/40 text-xs font-medium">v2.1.0 - Themed Edition</span>
+          <span className="text-white/40 text-xs font-medium">v2.2.0 - SCOUT Edition</span>
         </motion.div>
       </motion.header>
 
@@ -361,9 +380,9 @@ export default function Home() {
         </span>
       </motion.div>
 
-      {/* Games Grid - Symmetric layout */}
-      <div className="relative z-10 w-full max-w-4xl mx-auto mb-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* Games Grid - 2x2 on medium, 4 columns on large */}
+      <div className="relative z-10 w-full max-w-5xl mx-auto mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {games.map((game, index) => (
             <GameCard key={game.id} game={game} index={index} />
           ))}

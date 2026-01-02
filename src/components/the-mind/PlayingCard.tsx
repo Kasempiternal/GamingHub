@@ -20,7 +20,8 @@ export function PlayingCard({
   size = 'md',
   onClick,
   delay = 0,
-}: PlayingCardProps) {
+  isPlaying = false, // New prop for immediate feedback
+}: PlayingCardProps & { isPlaying?: boolean }) {
   const sizeConfig = {
     sm: { card: 'w-12 h-16', center: 'text-xl', corner: 'text-[8px]' },
     md: { card: 'w-16 h-22', center: 'text-3xl', corner: 'text-[10px]' },
@@ -48,24 +49,40 @@ export function PlayingCard({
     return 'border-rose-200/40';
   };
 
+  const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isPlayable && onClick && !isPlaying) {
+      onClick();
+    }
+  };
+
   return (
     <motion.button
       initial={{ opacity: 0, scale: 0.5, rotateY: 180 }}
-      animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-      transition={{ duration: 0.4, delay }}
-      whileHover={isPlayable ? { scale: 1.1, y: -8 } : {}}
-      whileTap={isPlayable ? { scale: 0.95 } : {}}
-      onClick={isPlayable ? onClick : undefined}
-      disabled={!isPlayable}
+      animate={{
+        opacity: isPlaying ? 0.5 : 1,
+        scale: isPlaying ? 0.8 : 1,
+        rotateY: 0,
+        y: isPlaying ? -20 : 0,
+      }}
+      transition={{ duration: 0.3, delay: isPlaying ? 0 : delay }}
+      whileHover={isPlayable && !isPlaying ? { scale: 1.1, y: -8 } : {}}
+      whileTap={isPlayable && !isPlaying ? { scale: 0.9 } : {}}
+      onClick={handleClick}
+      onTouchEnd={handleClick}
+      disabled={!isPlayable || isPlaying}
+      style={{ touchAction: 'manipulation' }}
       className={`
         ${sizeConfig[size].card}
         relative rounded-xl font-bold
         bg-gradient-to-br ${getCardColor()}
         flex items-center justify-center
         shadow-lg
-        ${isPlayable ? 'cursor-pointer hover:shadow-xl hover:shadow-white/20' : 'cursor-default opacity-90'}
+        ${isPlayable && !isPlaying ? 'cursor-pointer hover:shadow-xl hover:shadow-white/20 active:scale-90' : 'cursor-default opacity-90'}
         ${isConflict ? 'animate-shake' : ''}
-        transition-shadow duration-200
+        ${isPlaying ? 'ring-4 ring-white/50 animate-pulse' : ''}
+        transition-all duration-150
         select-none
         overflow-hidden
       `}

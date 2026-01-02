@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { PlayingCard } from './PlayingCard';
 
@@ -10,6 +11,32 @@ interface PlayerHandProps {
 }
 
 export function PlayerHand({ cards, canPlay, onPlayCard }: PlayerHandProps) {
+  const [playingCard, setPlayingCard] = useState<number | null>(null);
+  const prevCardsRef = useRef<number[]>(cards);
+
+  // Reset playingCard when the card is actually removed from hand
+  useEffect(() => {
+    if (playingCard !== null && !cards.includes(playingCard)) {
+      setPlayingCard(null);
+    }
+    prevCardsRef.current = cards;
+  }, [cards, playingCard]);
+
+  const handleCardClick = useCallback((value: number) => {
+    if (playingCard !== null) return; // Already playing a card
+
+    // Immediate visual feedback
+    setPlayingCard(value);
+
+    // Fire and forget - don't wait for response
+    onPlayCard(value);
+
+    // Reset after a timeout as fallback (in case of network issues)
+    setTimeout(() => {
+      setPlayingCard(null);
+    }, 3000);
+  }, [playingCard, onPlayCard]);
+
   if (cards.length === 0) {
     return (
       <motion.div
@@ -52,9 +79,10 @@ export function PlayerHand({ cards, canPlay, onPlayCard }: PlayerHandProps) {
           >
             <PlayingCard
               value={card}
-              isPlayable={canPlay}
+              isPlayable={canPlay && playingCard === null}
+              isPlaying={playingCard === card}
               size="lg"
-              onClick={() => onPlayCard(card)}
+              onClick={() => handleCardClick(card)}
               delay={0}
             />
           </motion.div>

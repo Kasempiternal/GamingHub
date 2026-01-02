@@ -57,19 +57,27 @@ export default function TheMindRoom() {
 
   // Handle conflict animation - only show once per unique conflict
   useEffect(() => {
-    if (game?.conflictCards && game.conflictCards.length > 0) {
+    // Always hide conflict overlay when game is lost or won
+    if (game?.phase === 'gameLost' || game?.phase === 'gameWon') {
+      setShowConflict(false);
+      shownConflictsRef.current = '';
+      return;
+    }
+
+    if (game?.conflictCards && game.conflictCards.length > 0 && game?.phase === 'playing') {
       const conflictKey = game.conflictCards.sort().join(',');
       if (shownConflictsRef.current !== conflictKey) {
         shownConflictsRef.current = conflictKey;
         setShowConflict(true);
-        const timer = setTimeout(() => setShowConflict(false), 3000);
+        const timer = setTimeout(() => setShowConflict(false), 2500); // Slightly faster
         return () => clearTimeout(timer);
       }
-    } else {
-      // Reset when conflicts are cleared (new level)
+    } else if (game?.phase !== 'playing') {
+      // Reset when not playing (new level, etc.)
       shownConflictsRef.current = '';
+      setShowConflict(false);
     }
-  }, [game?.conflictCards]);
+  }, [game?.conflictCards, game?.phase]);
 
   // Handle card played notification
   useEffect(() => {
@@ -469,9 +477,9 @@ export default function TheMindRoom() {
         )}
       </AnimatePresence>
 
-      {/* Conflict overlay */}
+      {/* Conflict overlay - never show when game is over */}
       <AnimatePresence>
-        {showConflict && game.conflictCards.length > 0 && (
+        {showConflict && game.conflictCards.length > 0 && game.phase === 'playing' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
