@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
       case 'create':
         return handleCreate(data.playerName, data.avatar);
       case 'join':
-        return handleJoin(data.roomCode, data.playerName, data.avatar);
+        return handleJoin(roomCode || data.roomCode, data.playerName, data.avatar);
       case 'rejoin':
         return handleRejoin(roomCode, playerId);
       case 'musicReady':
