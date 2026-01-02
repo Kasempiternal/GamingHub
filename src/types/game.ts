@@ -328,4 +328,111 @@ export const SCOUT_DECK: Array<{ top: number; bottom: number }> = [
   { top: 10, bottom: 10 },
 ];
 
+// ============================================
+// HIPSTER GAME TYPES
+// ============================================
+
+export type HipsterPhase = 'lobby' | 'collecting' | 'playing' | 'finished';
+export type HipsterTurnPhase = 'listening' | 'guessing' | 'bonus' | 'result';
+
+export interface HipsterSong {
+  id: string;                    // iTunes track ID (itunes_xxx)
+  title: string;
+  artist: string;
+  albumArt: string;              // Album cover URL
+  releaseYear: number;           // Extracted from release_date
+  previewUrl: string;            // 30-second preview URL from iTunes
+  addedBy: string;               // Player ID who contributed this song
+  addedAt: number;               // Timestamp
+}
+
+export interface HipsterTimelineCard {
+  song: HipsterSong;
+  position: number;              // Index in timeline (0-based)
+  placedAt: number;              // Timestamp when placed
+}
+
+export interface HipsterPlayer {
+  id: string;
+  name: string;
+  avatar: string;                // Emoji avatar
+  isHost: boolean;
+  timeline: HipsterTimelineCard[];  // Cards in player's timeline
+  tokens: number;                   // Hitster tokens earned
+  contributedSongs: string[];       // Song IDs this player added
+  isReady: boolean;                 // Ready to start (collection phase)
+  songsAdded: number;               // Count of songs added to pool
+}
+
+export interface HipsterBonusGuess {
+  artist: string;
+  title: string;
+}
+
+export interface HipsterCurrentTurn {
+  playerId: string;
+  song: HipsterSong;
+  phase: HipsterTurnPhase;
+  guessedPosition: number | null;   // Where player thinks song goes
+  isCorrect: boolean | null;
+  bonusGuess: HipsterBonusGuess | null;
+  bonusCorrect: boolean | null;
+  startedAt: number;
+}
+
+export interface HipsterGameState {
+  roomCode: string;
+  phase: HipsterPhase;
+  players: HipsterPlayer[];
+  songPool: HipsterSong[];          // All collected songs
+  usedSongs: string[];              // Song IDs already played
+  currentTurn: HipsterCurrentTurn | null;
+  currentPlayerIndex: number;
+  turnOrder: string[];              // Player IDs in turn order
+
+  // Music player state (host only)
+  musicReady: boolean;              // Host has confirmed audio works
+
+  // Game settings
+  songsPerPlayer: number;           // Default: 10
+  cardsToWin: number;               // Default: 10
+
+  winner: string | null;            // Player ID of winner
+  createdAt: number;
+  lastActivity: number;
+}
+
+// Spotify API response types
+export interface SpotifyTrackSearch {
+  id: string;
+  name: string;
+  artists: { name: string }[];
+  album: {
+    name: string;
+    images: { url: string; width: number }[];
+    release_date: string;
+  };
+  preview_url: string | null;
+  uri: string;
+}
+
+// Hipster game configuration
+export const HIPSTER_CONFIG = {
+  minPlayers: 2,
+  maxPlayers: 12,
+  defaultSongsPerPlayer: 10,
+  defaultCardsToWin: 10,
+  minSongsPerPlayer: 5,
+  maxSongsPerPlayer: 15,
+  listenDuration: 30000,        // 30 seconds to listen
+  guessDuration: 60000,         // 60 seconds to guess position
+  bonusDuration: 30000,         // 30 seconds for bonus guess
+};
+
+// Avatars for Hipster (music themed)
+export const HIPSTER_AVATARS = [
+  '🎸', '🎹', '🎺', '🎷', '🥁', '🎻', '🎤', '🎧',
+  '🎵', '🎶', '🎼', '🪗', '🪘', '🎚️', '🎛️', '📻'
+];
+
 export default {};

@@ -22,3 +22,10 @@ export {
   CurtainTransition,
   CircusRing,
 } from './CircusBackground';
+
+// Music/Hipster Theme
+export {
+  MusicBackground,
+  Equalizer,
+  VinylDecoration,
+} from '../hipster/MusicBackground';

@@ -58,6 +58,19 @@ const games = [
     available: true,
     tagline: 'El gran show',
   },
+  {
+    id: 'hipster',
+    name: 'Hipster',
+    description: 'Adivina la musica. Ordena canciones por año y demuestra tu conocimiento musical.',
+    icon: '🎵',
+    gradient: 'from-purple-600 to-pink-500',
+    accentColor: 'purple',
+    players: '2-12',
+    duration: '20-40 min',
+    href: '/hipster',
+    available: true,
+    tagline: 'Melomano',
+  },
 ];
 
 // Animated background with floating particles
@@ -171,6 +184,12 @@ function GameCard({ game, index }: { game: typeof games[0]; index: number }) {
       border: 'border-amber-600/30',
       text: 'text-amber-500',
       glow: 'shadow-amber-600/20',
+    },
+    purple: {
+      bg: 'bg-purple-500/10',
+      border: 'border-purple-500/30',
+      text: 'text-purple-400',
+      glow: 'shadow-purple-500/20',
     },
   };
 
@@ -364,7 +383,7 @@ export default function Home() {
             animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="text-white/40 text-xs font-medium">v2.2.0 - SCOUT Edition</span>
+          <span className="text-white/40 text-xs font-medium">v2.3.0 - Hipster Edition</span>
         </motion.div>
       </motion.header>
 

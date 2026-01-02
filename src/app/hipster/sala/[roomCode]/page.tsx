@@ -1,0 +1,781 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
+import { useHipster } from '@/hooks/useHipster';
+import type { HipsterSong, HipsterPlayer } from '@/types/game';
+import { HIPSTER_CONFIG } from '@/types/game';
+
+// Music-themed animated background
+function MusicBackground() {
+  return (
+    <div className="fixed inset-0 -z-10 overflow-hidden bg-[#1A0A24]">
+      <motion.div
+        className="absolute w-[600px] h-[600px] rounded-full"
+        style={{ background: 'radial-gradient(circle, rgba(156,39,176,0.15) 0%, transparent 70%)', top: '-20%', left: '-10%' }}
+        animate={{ x: [0, 50, 0], y: [0, 30, 0], scale: [1, 1.1, 1] }}
+        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute w-[500px] h-[500px] rounded-full"
+        style={{ background: 'radial-gradient(circle, rgba(233,30,99,0.12) 0%, transparent 70%)', top: '30%', right: '-15%' }}
+        animate={{ x: [0, -40, 0], y: [0, 40, 0], scale: [1, 1.15, 1] }}
+        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </div>
+  );
+}
+
+// QR Code component
+function QRCode({ roomCode }: { roomCode: string }) {
+  const url = typeof window !== 'undefined' ? `${window.location.origin}/hipster/unirse/${roomCode}` : '';
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}&bgcolor=1A0A24&color=9C27B0`;
+
+  return (
+    <div className="flex flex-col items-center">
+      <img src={qrUrl} alt="QR Code" className="w-24 h-24 rounded-lg" />
+      <p className="text-purple-400/60 text-xs mt-2">Escanea para unirte</p>
+    </div>
+  );
+}
+
+// Audio Player Component - Uses iTunes 30-second previews
+function AudioPlayer({ previewUrl, isPlaying, onEnded }: {
+  previewUrl: string;
+  isPlaying: boolean;
+  onEnded?: () => void;
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(30);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.play().catch(console.error);
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, previewUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      setProgress((audio.currentTime / audio.duration) * 100);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
+    const handleEnded = () => {
+      setProgress(100);
+      onEnded?.();
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [onEnded]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="w-full">
+      <audio ref={audioRef} src={previewUrl} preload="auto" />
+      <div className="h-1.5 bg-purple-500/20 rounded-full overflow-hidden">
+        <motion.div
+          className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-xs text-purple-400/60 mt-1">
+        <span>{formatTime(currentTime)}</span>
+        <span>{formatTime(duration)}</span>
+      </div>
+    </div>
+  );
+}
+
+// Song Search Component - Uses iTunes API
+function SongSearch({ onAddSong, addedSongs, maxSongs }: {
+  onAddSong: (song: Omit<HipsterSong, 'addedBy' | 'addedAt'>) => void;
+  addedSongs: number;
+  maxSongs: number;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Omit<HipsterSong, 'addedBy' | 'addedAt'>[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const search = useCallback(async () => {
+    if (!query.trim() || query.length < 2) {
+      setResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const response = await fetch(`/api/hipster/itunes/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      if (data.success) {
+        setResults(data.tracks);
+      }
+    } catch (e) {
+      console.error('Search error:', e);
+    } finally {
+      setSearching(false);
+    }
+  }, [query]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(search, 300);
+    return () => clearTimeout(timer);
+  }, [query, search]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar cancion..."
+          className="flex-1 px-4 py-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-white placeholder-purple-400/40 focus:outline-none focus:border-purple-400"
+        />
+        <span className="text-purple-400/60 text-sm whitespace-nowrap">
+          {addedSongs}/{maxSongs}
+        </span>
+      </div>
+
+      {searching && (
+        <div className="text-center py-4">
+          <motion.div
+            className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full mx-auto"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+        </div>
+      )}
+
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {results.map((track) => (
+          <motion.div
+            key={track.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/20 transition-colors"
+          >
+            <img src={track.albumArt} alt="" className="w-12 h-12 rounded-lg" />
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-medium truncate">{track.title}</p>
+              <p className="text-purple-400/60 text-sm truncate">{track.artist} • {track.releaseYear}</p>
+            </div>
+            <button
+              onClick={() => onAddSong(track)}
+              disabled={addedSongs >= maxSongs}
+              className="px-3 py-1.5 bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              +
+            </button>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Player List Component
+function PlayerList({ players, currentPlayerId }: { players: HipsterPlayer[]; currentPlayerId: string | null }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {players.map((player) => (
+        <div
+          key={player.id}
+          className={`flex items-center gap-2 p-2 rounded-lg ${
+            player.id === currentPlayerId ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-white/5'
+          }`}
+        >
+          <span className="text-2xl">{player.avatar}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-medium truncate">
+              {player.name}
+              {player.isHost && <span className="text-purple-400 ml-1">★</span>}
+            </p>
+            <p className="text-purple-400/50 text-xs">
+              {player.songsAdded} canciones
+              {player.isReady && <span className="text-green-400 ml-1">✓</span>}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Timeline Component
+function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive }: {
+  timeline: { song: HipsterSong }[];
+  onSelectPosition?: (position: number) => void;
+  selectedPosition?: number | null;
+  isInteractive?: boolean;
+}) {
+  const sortedTimeline = [...timeline].sort((a, b) => a.song.releaseYear - b.song.releaseYear);
+
+  if (sortedTimeline.length === 0) {
+    return (
+      <div className="text-center py-8 text-purple-400/50">
+        Tu linea temporal esta vacia
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2 overflow-x-auto py-4 px-2">
+      {isInteractive && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => onSelectPosition?.(0)}
+          className={`flex-shrink-0 w-16 h-24 rounded-lg border-2 border-dashed flex items-center justify-center ${
+            selectedPosition === 0 ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
+          }`}
+        >
+          <span className="text-purple-400/50 text-2xl">←</span>
+        </motion.button>
+      )}
+
+      {sortedTimeline.map((card, index) => (
+        <div key={card.song.id} className="flex items-center gap-2">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex-shrink-0 w-20 bg-purple-500/20 border border-purple-500/30 rounded-lg p-2 text-center"
+          >
+            <img src={card.song.albumArt} alt="" className="w-full aspect-square rounded-md mb-1" />
+            <p className="text-white text-xs font-bold">{card.song.releaseYear}</p>
+          </motion.div>
+
+          {isInteractive && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => onSelectPosition?.(index + 1)}
+              className={`flex-shrink-0 w-16 h-24 rounded-lg border-2 border-dashed flex items-center justify-center ${
+                selectedPosition === index + 1 ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
+              }`}
+            >
+              <span className="text-purple-400/50 text-2xl">→</span>
+            </motion.button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Main Room Component
+export default function HipsterRoom() {
+  const params = useParams();
+  const router = useRouter();
+  const roomCode = params.roomCode as string;
+
+  const {
+    game,
+    playerId,
+    loading,
+    error,
+    confirmMusicReady,
+    startCollecting,
+    addSong,
+    playerReady,
+    startGame,
+    submitGuess,
+    submitBonus,
+    skipBonus,
+    nextTurn,
+    resetGame,
+  } = useHipster();
+
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+
+  // Stop audio when turn phase changes
+  useEffect(() => {
+    if (game?.currentTurn?.phase !== 'listening' && game?.currentTurn?.phase !== 'guessing') {
+      setIsAudioPlaying(false);
+    }
+  }, [game?.currentTurn?.phase]);
+
+  const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
+  const [bonusArtist, setBonusArtist] = useState('');
+  const [bonusTitle, setBonusTitle] = useState('');
+
+
+  // Rejoin game if not connected
+  useEffect(() => {
+    const storedPlayerId = sessionStorage.getItem('hipsterPlayerId');
+    const storedRoomCode = sessionStorage.getItem('hipsterRoomCode');
+
+    if (storedRoomCode !== roomCode) {
+      // New room, redirect to join
+      router.push(`/hipster/unirse/${roomCode}`);
+    }
+  }, [roomCode, router]);
+
+  if (!game) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <MusicBackground />
+        <div className="text-center">
+          {loading ? (
+            <motion.div
+              className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full mx-auto"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            />
+          ) : (
+            <div className="text-purple-400">Cargando sala...</div>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  const currentPlayer = game.players.find(p => p.id === playerId);
+  const isHost = currentPlayer?.isHost ?? false;
+  const isMyTurn = game.currentTurn?.playerId === playerId;
+
+  // LOBBY PHASE
+  if (game.phase === 'lobby') {
+    return (
+      <main className="min-h-screen p-4 safe-area-top safe-area-bottom">
+        <MusicBackground />
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <Link href="/hipster" className="text-purple-400/70 hover:text-purple-300">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </Link>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white">Sala {roomCode}</h1>
+            <p className="text-purple-400/60 text-sm">Esperando jugadores...</p>
+          </div>
+          <div className="w-6" />
+        </div>
+
+        <div className="max-w-md mx-auto space-y-6">
+          {/* QR Code */}
+          <div className="flex justify-center">
+            <QRCode roomCode={roomCode} />
+          </div>
+
+          {/* Players */}
+          <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
+            <h3 className="text-purple-300 text-sm font-medium mb-3 uppercase tracking-wider">
+              Jugadores ({game.players.length}/{HIPSTER_CONFIG.maxPlayers})
+            </h3>
+            <PlayerList players={game.players} currentPlayerId={playerId} />
+          </div>
+
+          {/* Music Setup (Host only) */}
+          {isHost && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
+              <h3 className="text-purple-300 text-sm font-medium mb-3 uppercase tracking-wider">Musica</h3>
+              {game.musicReady ? (
+                <div className="flex items-center gap-2 text-green-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Audio listo</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-purple-400/60 text-sm">
+                    Asegurate de que el audio de tu dispositivo funciona
+                  </p>
+                  <button
+                    onClick={confirmMusicReady}
+                    disabled={loading}
+                    className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    <span className="text-xl">🎵</span>
+                    Confirmar Audio Listo
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Start Button */}
+          {isHost && game.musicReady && game.players.length >= HIPSTER_CONFIG.minPlayers && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={startCollecting}
+              disabled={loading}
+              className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl"
+            >
+              Empezar a Elegir Canciones
+            </motion.button>
+          )}
+
+          {error && (
+            <div className="text-red-400 text-sm text-center bg-red-500/10 border border-red-500/30 rounded-lg py-2">
+              {error}
+            </div>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // COLLECTING PHASE
+  if (game.phase === 'collecting') {
+    const allReady = game.players.every(p => p.isReady);
+
+    return (
+      <main className="min-h-screen p-4 safe-area-top safe-area-bottom">
+        <MusicBackground />
+
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Header */}
+          <div className="text-center mb-4">
+            <h1 className="text-xl font-bold text-white">Elige Canciones</h1>
+            <p className="text-purple-400/60 text-sm">
+              Pool: {game.songPool.length} canciones
+            </p>
+          </div>
+
+          {/* Search */}
+          <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
+            <SongSearch
+              onAddSong={(song) => addSong(song)}
+              addedSongs={currentPlayer?.songsAdded ?? 0}
+              maxSongs={game.songsPerPlayer}
+            />
+          </div>
+
+          {/* My Songs */}
+          {currentPlayer && currentPlayer.contributedSongs.length > 0 && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
+              <h3 className="text-purple-300 text-sm font-medium mb-3">Mis Canciones</h3>
+              <div className="space-y-2">
+                {game.songPool
+                  .filter(s => s.addedBy === playerId)
+                  .map(song => (
+                    <div key={song.id} className="flex items-center gap-2 p-2 bg-purple-500/10 rounded-lg">
+                      <img src={song.albumArt} alt="" className="w-10 h-10 rounded" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm truncate">{song.title}</p>
+                        <p className="text-purple-400/50 text-xs truncate">{song.artist}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Players Status */}
+          <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
+            <h3 className="text-purple-300 text-sm font-medium mb-3">Jugadores</h3>
+            <PlayerList players={game.players} currentPlayerId={playerId} />
+          </div>
+
+          {/* Ready / Start */}
+          <div className="flex gap-3">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={playerReady}
+              disabled={loading || (currentPlayer?.songsAdded ?? 0) < 1}
+              className={`flex-1 py-3 rounded-xl font-medium ${
+                currentPlayer?.isReady
+                  ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                  : 'bg-purple-500/20 border border-purple-500/30 text-purple-300'
+              }`}
+            >
+              {currentPlayer?.isReady ? '✓ Listo' : 'Estoy Listo'}
+            </motion.button>
+
+            {isHost && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={startGame}
+                disabled={loading || !allReady}
+                className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl disabled:opacity-50"
+              >
+                Empezar
+              </motion.button>
+            )}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // PLAYING PHASE
+  if (game.phase === 'playing' && game.currentTurn) {
+    const turnPlayer = game.players.find(p => p.id === game.currentTurn?.playerId);
+
+    return (
+      <main className="min-h-screen p-4 safe-area-top safe-area-bottom">
+        <MusicBackground />
+
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Turn Info */}
+          <div className="text-center">
+            <p className="text-purple-400/60 text-sm">Turno de</p>
+            <h2 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
+              <span className="text-3xl">{turnPlayer?.avatar}</span>
+              {turnPlayer?.name}
+            </h2>
+          </div>
+
+          {/* Current Song (only visible during listening/guessing) */}
+          {isMyTurn && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing') && game.currentTurn.song && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-6 border border-purple-500/20 text-center">
+              <motion.div
+                className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center overflow-hidden"
+                animate={isAudioPlaying ? { rotate: 360 } : {}}
+                transition={isAudioPlaying ? { duration: 3, repeat: Infinity, ease: 'linear' } : {}}
+              >
+                <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center overflow-hidden relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600/30 to-pink-600/30" />
+                  <span className="text-5xl">🎵</span>
+                </div>
+              </motion.div>
+
+              {/* Audio Player */}
+              <div className="mb-4">
+                <AudioPlayer
+                  previewUrl={game.currentTurn.song.previewUrl}
+                  isPlaying={isAudioPlaying}
+                />
+              </div>
+
+              {/* Play/Pause Button */}
+              <button
+                onClick={() => setIsAudioPlaying(!isAudioPlaying)}
+                className="mb-3 px-6 py-2 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 hover:bg-purple-500/30 transition-colors"
+              >
+                {isAudioPlaying ? '⏸ Pausar' : '▶ Reproducir'}
+              </button>
+
+              <p className="text-purple-300 font-medium">
+                {isAudioPlaying ? 'Escuchando...' : 'Presiona reproducir'}
+              </p>
+              <p className="text-purple-400/50 text-sm mt-1">Coloca esta cancion en tu linea temporal</p>
+            </div>
+          )}
+
+          {/* Timeline */}
+          {currentPlayer && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
+              <h3 className="text-purple-300 text-sm font-medium mb-2">Tu Linea Temporal ({currentPlayer.timeline.length}/{game.cardsToWin})</h3>
+              <Timeline
+                timeline={currentPlayer.timeline}
+                onSelectPosition={isMyTurn && game.currentTurn.phase !== 'result' ? setSelectedPosition : undefined}
+                selectedPosition={selectedPosition}
+                isInteractive={isMyTurn && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing')}
+              />
+            </div>
+          )}
+
+          {/* Guess Submit */}
+          {isMyTurn && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing') && selectedPosition !== null && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                setIsAudioPlaying(false);
+                submitGuess(selectedPosition);
+                setSelectedPosition(null);
+              }}
+              className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl"
+            >
+              Confirmar Posicion
+            </motion.button>
+          )}
+
+          {/* Bonus Phase */}
+          {isMyTurn && game.currentTurn.phase === 'bonus' && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-green-500/20 space-y-3">
+              <div className="text-center">
+                <span className="text-green-400 text-lg">✓ Correcto!</span>
+                <p className="text-purple-300 text-sm">Bonus: Adivina artista y titulo para ganar un token</p>
+              </div>
+              <input
+                type="text"
+                value={bonusArtist}
+                onChange={(e) => setBonusArtist(e.target.value)}
+                placeholder="Artista..."
+                className="w-full px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg text-white"
+              />
+              <input
+                type="text"
+                value={bonusTitle}
+                onChange={(e) => setBonusTitle(e.target.value)}
+                placeholder="Titulo..."
+                className="w-full px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg text-white"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={skipBonus}
+                  className="flex-1 py-2 bg-purple-500/20 text-purple-300 rounded-lg"
+                >
+                  Saltar
+                </button>
+                <button
+                  onClick={() => {
+                    submitBonus(bonusArtist, bonusTitle);
+                    setBonusArtist('');
+                    setBonusTitle('');
+                  }}
+                  className="flex-1 py-2 bg-purple-500 text-white rounded-lg"
+                >
+                  Adivinar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Result Phase */}
+          {game.currentTurn.phase === 'result' && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20 text-center space-y-3">
+              <div className="text-4xl">{game.currentTurn.isCorrect ? '🎉' : '😔'}</div>
+              <div>
+                <p className="text-white font-bold">{game.currentTurn.song.title}</p>
+                <p className="text-purple-400/60">{game.currentTurn.song.artist}</p>
+                <p className="text-purple-300 text-lg font-bold">{game.currentTurn.song.releaseYear}</p>
+              </div>
+              {game.currentTurn.bonusCorrect !== null && (
+                <p className={game.currentTurn.bonusCorrect ? 'text-green-400' : 'text-purple-400/50'}>
+                  {game.currentTurn.bonusCorrect ? '+1 Token!' : 'Bonus incorrecto'}
+                </p>
+              )}
+              {(isHost || isMyTurn) && (
+                <button
+                  onClick={nextTurn}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl"
+                >
+                  Siguiente Turno
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Scoreboard */}
+          <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
+            <h3 className="text-purple-300 text-sm font-medium mb-2">Puntuaciones</h3>
+            <div className="space-y-1">
+              {game.players
+                .sort((a, b) => b.timeline.length - a.timeline.length)
+                .map((player, idx) => (
+                  <div
+                    key={player.id}
+                    className={`flex items-center justify-between p-2 rounded-lg ${
+                      player.id === playerId ? 'bg-purple-500/20' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : ''}</span>
+                      <span>{player.avatar}</span>
+                      <span className="text-white text-sm">{player.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-purple-300 text-sm">{player.timeline.length} cartas</span>
+                      <span className="text-yellow-400 text-sm">🪙 {player.tokens}</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // FINISHED PHASE
+  if (game.phase === 'finished') {
+    const winner = game.players.find(p => p.id === game.winner);
+
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-4">
+        <MusicBackground />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-sm w-full"
+        >
+          <motion.div
+            className="text-8xl mb-4"
+            animate={{ rotate: [0, -10, 10, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 1 }}
+          >
+            🏆
+          </motion.div>
+          <h1 className="text-3xl font-bold text-white mb-2">Ganador!</h1>
+          <div className="flex items-center justify-center gap-2 text-2xl text-purple-300 mb-6">
+            <span className="text-4xl">{winner?.avatar}</span>
+            <span>{winner?.name}</span>
+          </div>
+
+          <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20 mb-6">
+            <h3 className="text-purple-300 text-sm font-medium mb-3">Resultados Finales</h3>
+            {game.players
+              .sort((a, b) => b.timeline.length - a.timeline.length)
+              .map((player, idx) => (
+                <div key={player.id} className="flex items-center justify-between py-2 border-b border-purple-500/10 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}</span>
+                    <span>{player.avatar}</span>
+                    <span className="text-white">{player.name}</span>
+                  </div>
+                  <span className="text-purple-300">{player.timeline.length} cartas</span>
+                </div>
+              ))}
+          </div>
+
+          {isHost && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={resetGame}
+              className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl"
+            >
+              Jugar de Nuevo
+            </motion.button>
+          )}
+
+          <Link href="/hipster" className="block mt-4 text-purple-400/60 hover:text-purple-300">
+            Volver al menu
+          </Link>
+        </motion.div>
+      </main>
+    );
+  }
+
+  return null;
+}
