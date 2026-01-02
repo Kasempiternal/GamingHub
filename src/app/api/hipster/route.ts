@@ -1,26 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import type { HipsterGameState, HipsterPlayer, HipsterSong, HipsterTimelineCard, HipsterCurrentTurn } from '@/types/game';
 import { HIPSTER_CONFIG, HIPSTER_AVATARS } from '@/types/game';
 
-// KV storage helpers with 24-hour TTL
-const GAME_TTL = 60 * 60 * 24; // 24 hours in seconds
+// Lazy initialization of Neon SQL client
+let sql: NeonQueryFunction<false, false> | null = null;
+function getSQL() {
+  if (!sql) {
+    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+    if (!dbUrl) {
+      throw new Error('Database URL not configured');
+    }
+    sql = neon(dbUrl);
+  }
+  return sql;
+}
+
+// Initialize games table if not exists
+async function initDB() {
+  try {
+    const db = getSQL();
+    await db`
+      CREATE TABLE IF NOT EXISTS games (
+        key TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '24 hours')
+      )
+    `;
+    // Create index for cleanup
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_games_expires ON games (expires_at)
+    `;
+  } catch (error) {
+    console.error('DB init error:', error);
+  }
+}
+
+// Run init once
+let dbInitialized = false;
+async function ensureDB() {
+  if (!dbInitialized) {
+    await initDB();
+    dbInitialized = true;
+  }
+}
+
+// Game storage helpers with 24-hour TTL
 const getGameKey = (roomCode: string) => `hipster:${roomCode.toUpperCase()}`;
 
 async function getGame(roomCode: string): Promise<HipsterGameState | null> {
   try {
-    return await kv.get<HipsterGameState>(getGameKey(roomCode));
+    await ensureDB();
+    const db = getSQL();
+    const result = await db`
+      SELECT data FROM games
+      WHERE key = ${getGameKey(roomCode)}
+      AND expires_at > NOW()
+    `;
+    if (result.length === 0) return null;
+    return result[0].data as HipsterGameState;
   } catch (error) {
-    console.error('KV get error:', error);
+    console.error('DB get error:', error);
     return null;
   }
 }
 
 async function setGame(roomCode: string, game: HipsterGameState): Promise<void> {
   try {
-    await kv.set(getGameKey(roomCode), game, { ex: GAME_TTL });
+    await ensureDB();
+    const db = getSQL();
+    await db`
+      INSERT INTO games (key, data, expires_at)
+      VALUES (${getGameKey(roomCode)}, ${JSON.stringify(game)}::jsonb, NOW() + INTERVAL '24 hours')
+      ON CONFLICT (key)
+      DO UPDATE SET data = ${JSON.stringify(game)}::jsonb, expires_at = NOW() + INTERVAL '24 hours'
+    `;
   } catch (error) {
-    console.error('KV set error:', error);
+    console.error('DB set error:', error);
+    throw error;
   }
 }
 

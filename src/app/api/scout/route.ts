@@ -1,34 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import type { ScoutGameState, ScoutPlayer, ScoutCard, ScoutCurrentPlay, ScoutRound, ScoutRoundScore, ScoutPlayType } from '@/types/game';
 import { SCOUT_DECK, SCOUT_CONFIG } from '@/types/game';
 
-// KV storage helpers with 24-hour TTL
-const GAME_TTL = 60 * 60 * 24; // 24 hours in seconds
+// Lazy initialization of Neon SQL client
+let sql: NeonQueryFunction<false, false> | null = null;
+function getSQL() {
+  if (!sql) {
+    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+    if (!dbUrl) {
+      throw new Error('Database URL not configured');
+    }
+    sql = neon(dbUrl);
+  }
+  return sql;
+}
+
+// Initialize games table if not exists
+async function initDB() {
+  try {
+    const db = getSQL();
+    await db`
+      CREATE TABLE IF NOT EXISTS games (
+        key TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '24 hours')
+      )
+    `;
+  } catch (error) {
+    console.error('DB init error:', error);
+  }
+}
+
+let dbInitialized = false;
+async function ensureDB() {
+  if (!dbInitialized) {
+    await initDB();
+    dbInitialized = true;
+  }
+}
+
 const getGameKey = (roomCode: string) => `scout:${roomCode.toUpperCase()}`;
 
 async function getGame(roomCode: string): Promise<ScoutGameState | null> {
   try {
-    return await kv.get<ScoutGameState>(getGameKey(roomCode));
+    await ensureDB();
+    const db = getSQL();
+    const result = await db`
+      SELECT data FROM games
+      WHERE key = ${getGameKey(roomCode)}
+      AND expires_at > NOW()
+    `;
+    if (result.length === 0) return null;
+    return result[0].data as ScoutGameState;
   } catch (error) {
-    console.error('KV get error:', error);
+    console.error('DB get error:', error);
     return null;
   }
 }
 
 async function setGame(roomCode: string, game: ScoutGameState): Promise<void> {
   try {
-    await kv.set(getGameKey(roomCode), game, { ex: GAME_TTL });
+    await ensureDB();
+    const db = getSQL();
+    await db`
+      INSERT INTO games (key, data, expires_at)
+      VALUES (${getGameKey(roomCode)}, ${JSON.stringify(game)}::jsonb, NOW() + INTERVAL '24 hours')
+      ON CONFLICT (key)
+      DO UPDATE SET data = ${JSON.stringify(game)}::jsonb, expires_at = NOW() + INTERVAL '24 hours'
+    `;
   } catch (error) {
-    console.error('KV set error:', error);
+    console.error('DB set error:', error);
+    throw error;
   }
 }
 
 async function deleteGame(roomCode: string): Promise<void> {
   try {
-    await kv.del(getGameKey(roomCode));
+    await ensureDB();
+    const db = getSQL();
+    await db`DELETE FROM games WHERE key = ${getGameKey(roomCode)}`;
   } catch (error) {
-    console.error('KV delete error:', error);
+    console.error('DB delete error:', error);
   }
 }
 
