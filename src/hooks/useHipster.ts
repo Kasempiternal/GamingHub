@@ -27,6 +27,9 @@ interface UseHipsterResult {
   submitBonus: (artist: string, title: string) => Promise<boolean>;
   skipBonus: () => Promise<boolean>;
   useToken: (targetPlayerId: string, cardIndex: number) => Promise<boolean>;
+  // Intercept actions
+  intercept: (position: number) => Promise<boolean>;
+  resolveIntercept: () => Promise<boolean>;
   nextTurn: () => Promise<boolean>;
   resetGame: () => Promise<boolean>;
 }
@@ -200,6 +203,15 @@ export function useHipster(): UseHipsterResult {
     return apiCall('useToken', { targetPlayerId, cardIndex });
   }, [apiCall]);
 
+  // Intercept actions
+  const intercept = useCallback(async (position: number): Promise<boolean> => {
+    return apiCall('intercept', { position });
+  }, [apiCall]);
+
+  const resolveIntercept = useCallback(async (): Promise<boolean> => {
+    return apiCall('resolveIntercept');
+  }, [apiCall]);
+
   const nextTurn = useCallback(async (): Promise<boolean> => {
     return apiCall('nextTurn');
   }, [apiCall]);
@@ -226,6 +238,8 @@ export function useHipster(): UseHipsterResult {
     submitBonus,
     skipBonus,
     useToken,
+    intercept,
+    resolveIntercept,
     nextTurn,
     resetGame,
   };

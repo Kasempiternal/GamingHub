@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import type { HipsterGameState, HipsterPlayer, HipsterSong, HipsterTimelineCard, HipsterCurrentTurn } from '@/types/game';
 import { HIPSTER_CONFIG, HIPSTER_AVATARS } from '@/types/game';
+import { getRandomSongsFromCatalog, type CuratedSongData } from '@/lib/hipsterSongs';
 
 // Lazy initialization of Neon SQL client
 let sql: NeonQueryFunction<false, false> | null = null;
@@ -136,6 +137,65 @@ function drawSongForPlayer(
   }
 
   return available[Math.floor(Math.random() * available.length)];
+}
+
+// Fetch a song from iTunes API
+async function fetchSongFromiTunes(songData: CuratedSongData): Promise<HipsterSong | null> {
+  try {
+    const response = await fetch(
+      `https://itunes.apple.com/search?${new URLSearchParams({
+        term: songData.searchQuery,
+        media: 'music',
+        entity: 'song',
+        limit: '5',
+        country: 'ES',
+      })}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const track = data.results?.find((t: { previewUrl?: string }) => t.previewUrl);
+
+    if (!track) return null;
+
+    return {
+      id: `itunes_${track.trackId}`,
+      title: track.trackName || songData.title,
+      artist: track.artistName || songData.artist,
+      albumArt: track.artworkUrl100?.replace('100x100', '300x300') || '',
+      releaseYear: songData.releaseYear, // Use our known year for accuracy
+      previewUrl: track.previewUrl,
+      addedBy: 'system', // System-added songs
+      addedAt: Date.now(),
+    };
+  } catch (err) {
+    console.error('iTunes fetch error for:', songData.title, err);
+    return null;
+  }
+}
+
+// Inject random songs from curated catalog into game pool
+async function injectRandomSongs(
+  game: HipsterGameState,
+  count: number
+): Promise<number> {
+  const existingTitles = game.songPool.map(s => s.title);
+  const randomSongs = getRandomSongsFromCatalog(count * 2, existingTitles); // Get extra in case some fail
+
+  let added = 0;
+  for (const songData of randomSongs) {
+    if (added >= count) break;
+
+    const song = await fetchSongFromiTunes(songData);
+    if (song && !game.songPool.some(s => s.id === song.id)) {
+      game.songPool.push(song);
+      added++;
+    }
+  }
+
+  return added;
 }
 
 // Check if timeline position guess is correct
@@ -274,6 +334,10 @@ export async function POST(request: NextRequest) {
         return handleUseToken(roomCode, playerId, data.targetPlayerId, data.cardIndex);
       case 'nextTurn':
         return handleNextTurn(roomCode, playerId);
+      case 'intercept':
+        return handleIntercept(roomCode, playerId, data.position);
+      case 'resolveIntercept':
+        return handleResolveIntercept(roomCode, playerId);
       case 'reset':
         return handleReset(roomCode, playerId);
       default:
@@ -540,6 +604,11 @@ async function handleStartGame(roomCode: string, playerId: string) {
     return error('No todos los jugadores están listos');
   }
 
+  // Inject random songs from curated catalog (5 per player)
+  const randomSongsNeeded = game.players.length * (HIPSTER_CONFIG.randomSongsPerPlayer || 5);
+  const randomSongsAdded = await injectRandomSongs(game, randomSongsNeeded);
+  console.log(`Injected ${randomSongsAdded} random songs into pool`);
+
   // Need minimum songs per player (excluding own contributions)
   const minSongsNeeded = game.players.length * 3; // At least 3 songs per player from others
   if (game.songPool.length < minSongsNeeded) {
@@ -578,6 +647,9 @@ async function handleStartGame(roomCode: string, playerId: string) {
       bonusGuess: null,
       bonusCorrect: null,
       startedAt: Date.now(),
+      intercepts: [],
+      interceptDeadline: null,
+      interceptWinner: null,
     };
   }
 
@@ -602,32 +674,12 @@ async function handleSubmitGuess(roomCode: string, playerId: string, position: n
   const player = game.players.find(p => p.id === playerId);
   if (!player) return error('Jugador no encontrado');
 
-  const isCorrect = checkGuessCorrect(player.timeline, game.currentTurn.song, position);
-
+  // Don't reveal if correct yet - enter intercepting phase first
   game.currentTurn.guessedPosition = position;
-  game.currentTurn.isCorrect = isCorrect;
-  game.currentTurn.phase = isCorrect ? 'bonus' : 'result';
-
-  if (isCorrect) {
-    // Add card to timeline at correct position
-    const newCard: HipsterTimelineCard = {
-      song: game.currentTurn.song,
-      position,
-      placedAt: Date.now(),
-    };
-    player.timeline.splice(position, 0, newCard);
-    // Update positions
-    player.timeline.forEach((card, idx) => {
-      card.position = idx;
-    });
-    game.usedSongs.push(game.currentTurn.song.id);
-
-    // Check win condition
-    if (player.timeline.length >= game.cardsToWin) {
-      game.winner = playerId;
-      game.phase = 'finished';
-    }
-  }
+  game.currentTurn.phase = 'intercepting';
+  game.currentTurn.intercepts = [];
+  game.currentTurn.interceptDeadline = Date.now() + 10000; // 10 second window
+  game.currentTurn.interceptWinner = null;
 
   game.lastActivity = Date.now();
   await setGame(game.roomCode, game);
@@ -662,6 +714,25 @@ async function handleSubmitBonus(roomCode: string, playerId: string, artist: str
     player.tokens++;
   }
 
+  // Now add the card to timeline (delayed from guess phase to hide album art)
+  const position = game.currentTurn.guessedPosition!;
+  const newCard: HipsterTimelineCard = {
+    song: game.currentTurn.song,
+    position,
+    placedAt: Date.now(),
+  };
+  player.timeline.splice(position, 0, newCard);
+  player.timeline.forEach((card, idx) => {
+    card.position = idx;
+  });
+  game.usedSongs.push(game.currentTurn.song.id);
+
+  // Check win condition
+  if (player.timeline.length >= game.cardsToWin) {
+    game.winner = playerId;
+    game.phase = 'finished';
+  }
+
   game.lastActivity = Date.now();
   await setGame(game.roomCode, game);
 
@@ -680,10 +751,32 @@ async function handleSkipBonus(roomCode: string, playerId: string) {
     return error('No es momento del bonus');
   }
 
+  const player = game.players.find(p => p.id === playerId);
+  if (!player) return error('Jugador no encontrado');
+
   game.currentTurn.bonusCorrect = false;
   game.currentTurn.phase = 'result';
-  game.lastActivity = Date.now();
 
+  // Now add the card to timeline (delayed from guess phase to hide album art)
+  const position = game.currentTurn.guessedPosition!;
+  const newCard: HipsterTimelineCard = {
+    song: game.currentTurn.song,
+    position,
+    placedAt: Date.now(),
+  };
+  player.timeline.splice(position, 0, newCard);
+  player.timeline.forEach((card, idx) => {
+    card.position = idx;
+  });
+  game.usedSongs.push(game.currentTurn.song.id);
+
+  // Check win condition
+  if (player.timeline.length >= game.cardsToWin) {
+    game.winner = playerId;
+    game.phase = 'finished';
+  }
+
+  game.lastActivity = Date.now();
   await setGame(game.roomCode, game);
 
   return success({ game });
@@ -765,6 +858,9 @@ async function handleNextTurn(roomCode: string, playerId: string) {
       bonusGuess: null,
       bonusCorrect: null,
       startedAt: Date.now(),
+      intercepts: [],
+      interceptDeadline: null,
+      interceptWinner: null,
     };
   } else {
     // No more songs available, end game
@@ -780,6 +876,140 @@ async function handleNextTurn(roomCode: string, playerId: string) {
     game.winner = winnerId;
     game.phase = 'finished';
     game.currentTurn = null;
+  }
+
+  game.lastActivity = Date.now();
+  await setGame(game.roomCode, game);
+
+  return success({ game });
+}
+
+async function handleIntercept(roomCode: string, playerId: string, position: number) {
+  const game = await getGame(roomCode);
+  if (!game) return error('Sala no encontrada');
+
+  if (!game.currentTurn) {
+    return error('No hay turno activo');
+  }
+
+  // Cannot intercept your own turn
+  if (game.currentTurn.playerId === playerId) {
+    return error('No puedes interceptar tu propio turno');
+  }
+
+  // Must be in intercept phase
+  if (game.currentTurn.phase !== 'intercepting') {
+    return error('No es momento de interceptar');
+  }
+
+  // Check if intercept window has expired
+  if (game.currentTurn.interceptDeadline && Date.now() > game.currentTurn.interceptDeadline) {
+    return error('El tiempo de interceptación ha expirado');
+  }
+
+  const player = game.players.find(p => p.id === playerId);
+  if (!player) return error('Jugador no encontrado');
+
+  // Must have at least 1 token
+  if (player.tokens < 1) {
+    return error('No tienes tokens para interceptar');
+  }
+
+  // Check if already intercepted
+  if (game.currentTurn.intercepts.some(i => i.playerId === playerId)) {
+    return error('Ya has interceptado este turno');
+  }
+
+  // Deduct token immediately (no refunds!)
+  player.tokens--;
+
+  // Add intercept to the list
+  game.currentTurn.intercepts.push({
+    playerId,
+    position,
+    timestamp: Date.now(),
+  });
+
+  game.lastActivity = Date.now();
+  await setGame(game.roomCode, game);
+
+  return success({ game });
+}
+
+async function handleResolveIntercept(roomCode: string, playerId: string) {
+  const game = await getGame(roomCode);
+  if (!game) return error('Sala no encontrada');
+
+  // Only host or current player can resolve
+  const player = game.players.find(p => p.id === playerId);
+  if (!player?.isHost && game.currentTurn?.playerId !== playerId) {
+    return error('No puedes resolver la interceptación');
+  }
+
+  if (!game.currentTurn || game.currentTurn.phase !== 'intercepting') {
+    return error('No hay interceptación que resolver');
+  }
+
+  const currentPlayer = game.players.find(p => p.id === game.currentTurn!.playerId);
+  if (!currentPlayer) return error('Jugador actual no encontrado');
+
+  const song = game.currentTurn.song;
+  const originalPosition = game.currentTurn.guessedPosition!;
+  const originalCorrect = checkGuessCorrect(currentPlayer.timeline, song, originalPosition);
+
+  // Check all intercepts
+  let winningInterceptor: { playerId: string; position: number } | null = null;
+
+  if (!originalCorrect) {
+    // Original player is wrong, check if any interceptor got it right
+    for (const intercept of game.currentTurn.intercepts) {
+      const interceptPlayer = game.players.find(p => p.id === intercept.playerId);
+      if (interceptPlayer) {
+        // Check if interceptor's guess is correct against the CURRENT player's timeline
+        const interceptCorrect = checkGuessCorrect(currentPlayer.timeline, song, intercept.position);
+        if (interceptCorrect) {
+          // First correct interceptor wins (by timestamp - they're already sorted)
+          winningInterceptor = intercept;
+          break;
+        }
+      }
+    }
+  }
+
+  // Store correctness result
+  game.currentTurn.isCorrect = originalCorrect;
+  game.usedSongs.push(song.id);
+
+  if (winningInterceptor) {
+    // Interceptor wins! Add card to interceptor's timeline
+    const interceptPlayer = game.players.find(p => p.id === winningInterceptor!.playerId);
+    if (interceptPlayer) {
+      const newCard: HipsterTimelineCard = {
+        song,
+        position: winningInterceptor.position,
+        placedAt: Date.now(),
+      };
+      interceptPlayer.timeline.splice(winningInterceptor.position, 0, newCard);
+      interceptPlayer.timeline.forEach((card, idx) => { card.position = idx; });
+
+      game.currentTurn.interceptWinner = winningInterceptor.playerId;
+      game.currentTurn.phase = 'result';
+
+      // Check if interceptor won the game
+      if (interceptPlayer.timeline.length >= game.cardsToWin) {
+        game.winner = interceptPlayer.id;
+        game.phase = 'finished';
+      }
+    }
+  } else if (originalCorrect) {
+    // Original player was correct, they get to try bonus
+    game.currentTurn.phase = 'bonus';
+    game.currentTurn.interceptWinner = null;
+    // Don't add card yet - it's added after bonus phase to hide album art
+  } else {
+    // Nobody got it right, card is discarded
+    game.currentTurn.phase = 'result';
+    game.currentTurn.interceptWinner = null;
   }
 
   game.lastActivity = Date.now();

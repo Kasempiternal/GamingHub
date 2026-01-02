@@ -311,6 +311,8 @@ export default function HipsterRoom() {
     submitGuess,
     submitBonus,
     skipBonus,
+    intercept,
+    resolveIntercept,
     nextTurn,
     resetGame,
   } = useHipster();
@@ -319,14 +321,43 @@ export default function HipsterRoom() {
 
   // Stop audio when turn phase changes
   useEffect(() => {
-    if (game?.currentTurn?.phase !== 'listening' && game?.currentTurn?.phase !== 'guessing') {
+    if (game?.currentTurn?.phase !== 'listening' && game?.currentTurn?.phase !== 'guessing' && game?.currentTurn?.phase !== 'intercepting') {
       setIsAudioPlaying(false);
     }
   }, [game?.currentTurn?.phase]);
 
+  // Intercept countdown timer
+  useEffect(() => {
+    if (game?.currentTurn?.phase !== 'intercepting' || !game?.currentTurn?.interceptDeadline) {
+      setInterceptCountdown(0);
+      setShowInterceptUI(false);
+      setInterceptPosition(null);
+      return;
+    }
+
+    const isCurrentPlayersTurn = game?.currentTurn?.playerId === playerId;
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((game.currentTurn!.interceptDeadline! - Date.now()) / 1000));
+      setInterceptCountdown(remaining);
+
+      // Auto-resolve when countdown reaches 0
+      if (remaining === 0 && isCurrentPlayersTurn) {
+        resolveIntercept();
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 100);
+    return () => clearInterval(interval);
+  }, [game?.currentTurn?.phase, game?.currentTurn?.interceptDeadline, game?.currentTurn?.playerId, playerId, resolveIntercept]);
+
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   const [bonusArtist, setBonusArtist] = useState('');
   const [bonusTitle, setBonusTitle] = useState('');
+  const [interceptPosition, setInterceptPosition] = useState<number | null>(null);
+  const [showInterceptUI, setShowInterceptUI] = useState(false);
+  const [interceptCountdown, setInterceptCountdown] = useState<number>(0);
 
 
   // Rejoin game if not connected
@@ -552,8 +583,8 @@ export default function HipsterRoom() {
             </h2>
           </div>
 
-          {/* Current Song (only visible during listening/guessing) */}
-          {isMyTurn && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing') && game.currentTurn.song && (
+          {/* Current Song - visible to ALL players during listening/guessing/intercepting */}
+          {(game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing' || game.currentTurn.phase === 'intercepting') && game.currentTurn.song && (
             <div className="bg-slate-900/60 backdrop-blur rounded-xl p-6 border border-purple-500/20 text-center">
               <motion.div
                 className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center overflow-hidden"
@@ -582,10 +613,21 @@ export default function HipsterRoom() {
                 {isAudioPlaying ? '⏸ Pausar' : '▶ Reproducir'}
               </button>
 
-              <p className="text-purple-300 font-medium">
-                {isAudioPlaying ? 'Escuchando...' : 'Presiona reproducir'}
-              </p>
-              <p className="text-purple-400/50 text-sm mt-1">Coloca esta cancion en tu linea temporal</p>
+              {isMyTurn ? (
+                <>
+                  <p className="text-purple-300 font-medium">
+                    {isAudioPlaying ? 'Escuchando...' : 'Presiona reproducir'}
+                  </p>
+                  <p className="text-purple-400/50 text-sm mt-1">Coloca esta cancion en tu linea temporal</p>
+                </>
+              ) : (
+                <p className="text-purple-400/50 text-sm">
+                  {game.currentTurn.phase === 'intercepting'
+                    ? 'Puedes interceptar si crees saber la posicion correcta'
+                    : `Esperando a que ${turnPlayer?.name} coloque la cancion...`
+                  }
+                </p>
+              )}
             </div>
           )}
 
@@ -616,6 +658,118 @@ export default function HipsterRoom() {
             >
               Confirmar Posicion
             </motion.button>
+          )}
+
+          {/* Intercept Phase UI */}
+          {game.currentTurn.phase === 'intercepting' && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-yellow-500/30 space-y-4">
+              {/* Countdown */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-yellow-400 text-lg">⏱️</span>
+                  <span className="text-white font-medium">Fase de Interceptacion</span>
+                </div>
+                <motion.div
+                  className="text-2xl font-bold text-yellow-400"
+                  animate={{ scale: interceptCountdown <= 3 ? [1, 1.2, 1] : 1 }}
+                  transition={{ duration: 0.5, repeat: interceptCountdown <= 3 ? Infinity : 0 }}
+                >
+                  {interceptCountdown}s
+                </motion.div>
+              </div>
+
+              {/* Turn player's selected position indicator */}
+              {isMyTurn ? (
+                <div className="text-center text-purple-300">
+                  <p>Has colocado la cancion en la posicion {(game.currentTurn.guessedPosition ?? 0) + 1}</p>
+                  <p className="text-purple-400/50 text-sm">Esperando posibles interceptaciones...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Show turn player's timeline for interceptors */}
+                  {turnPlayer && (
+                    <div className="space-y-2">
+                      <p className="text-purple-300 text-sm">
+                        Linea temporal de {turnPlayer.name} ({turnPlayer.timeline.length} cartas)
+                      </p>
+                      <Timeline
+                        timeline={turnPlayer.timeline}
+                        onSelectPosition={showInterceptUI ? setInterceptPosition : undefined}
+                        selectedPosition={interceptPosition}
+                        isInteractive={showInterceptUI}
+                      />
+                    </div>
+                  )}
+
+                  {/* Intercept Button or Placement UI */}
+                  {!showInterceptUI ? (
+                    <div className="flex flex-col items-center gap-2">
+                      {currentPlayer && currentPlayer.tokens > 0 && !game.currentTurn.intercepts.some(i => i.playerId === playerId) ? (
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setShowInterceptUI(true)}
+                          className="px-6 py-3 bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 rounded-xl font-medium flex items-center gap-2"
+                        >
+                          <span>🎯</span>
+                          Interceptar (1 token)
+                        </motion.button>
+                      ) : game.currentTurn.intercepts.some(i => i.playerId === playerId) ? (
+                        <p className="text-green-400 text-sm">✓ Ya has interceptado</p>
+                      ) : (
+                        <p className="text-purple-400/50 text-sm">No tienes tokens para interceptar</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-yellow-300 text-sm text-center">
+                        Selecciona donde crees que va la cancion
+                      </p>
+                      {interceptPosition !== null && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setShowInterceptUI(false);
+                              setInterceptPosition(null);
+                            }}
+                            className="flex-1 py-2 bg-purple-500/20 text-purple-300 rounded-lg"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => {
+                              intercept(interceptPosition);
+                              setShowInterceptUI(false);
+                              setInterceptPosition(null);
+                            }}
+                            className="flex-1 py-2 bg-yellow-500 text-black font-medium rounded-lg"
+                          >
+                            Confirmar Intercepcion
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* List of who has intercepted */}
+              {game.currentTurn.intercepts.length > 0 && (
+                <div className="pt-2 border-t border-purple-500/20">
+                  <p className="text-purple-400/50 text-xs mb-1">Interceptaciones:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {game.currentTurn.intercepts.map(int => {
+                      const intPlayer = game.players.find(p => p.id === int.playerId);
+                      return (
+                        <span key={int.playerId} className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">
+                          {intPlayer?.avatar} {intPlayer?.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Bonus Phase */}
@@ -663,17 +817,39 @@ export default function HipsterRoom() {
           {/* Result Phase */}
           {game.currentTurn.phase === 'result' && (
             <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20 text-center space-y-3">
-              <div className="text-4xl">{game.currentTurn.isCorrect ? '🎉' : '😔'}</div>
+              {/* Intercept outcome */}
+              {game.currentTurn.interceptWinner ? (
+                <>
+                  <div className="text-4xl">🎯</div>
+                  <div className="text-yellow-400 font-bold">
+                    {game.players.find(p => p.id === game.currentTurn?.interceptWinner)?.name} intercepto correctamente!
+                  </div>
+                </>
+              ) : (
+                <div className="text-4xl">{game.currentTurn.isCorrect ? '🎉' : '😔'}</div>
+              )}
+
               <div>
                 <p className="text-white font-bold">{game.currentTurn.song.title}</p>
                 <p className="text-purple-400/60">{game.currentTurn.song.artist}</p>
                 <p className="text-purple-300 text-lg font-bold">{game.currentTurn.song.releaseYear}</p>
               </div>
-              {game.currentTurn.bonusCorrect !== null && (
-                <p className={game.currentTurn.bonusCorrect ? 'text-green-400' : 'text-purple-400/50'}>
-                  {game.currentTurn.bonusCorrect ? '+1 Token!' : 'Bonus incorrecto'}
+
+              {/* Show what happened */}
+              {game.currentTurn.interceptWinner ? (
+                <p className="text-yellow-300 text-sm">
+                  {turnPlayer?.name} fallo y un interceptor gano la carta
                 </p>
+              ) : game.currentTurn.isCorrect ? (
+                game.currentTurn.bonusCorrect !== null && (
+                  <p className={game.currentTurn.bonusCorrect ? 'text-green-400' : 'text-purple-400/50'}>
+                    {game.currentTurn.bonusCorrect ? '+1 Token!' : 'Bonus incorrecto'}
+                  </p>
+                )
+              ) : (
+                <p className="text-red-400/60 text-sm">Posicion incorrecta - carta descartada</p>
               )}
+
               {(isHost || isMyTurn) && (
                 <button
                   onClick={nextTurn}

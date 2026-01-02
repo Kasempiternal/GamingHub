@@ -333,7 +333,13 @@ export const SCOUT_DECK: Array<{ top: number; bottom: number }> = [
 // ============================================
 
 export type HipsterPhase = 'lobby' | 'collecting' | 'playing' | 'finished';
-export type HipsterTurnPhase = 'listening' | 'guessing' | 'bonus' | 'result';
+export type HipsterTurnPhase = 'listening' | 'guessing' | 'intercepting' | 'bonus' | 'result';
+
+export interface HipsterIntercept {
+  playerId: string;
+  position: number;        // Where interceptor thinks song goes
+  timestamp: number;
+}
 
 export interface HipsterSong {
   id: string;                    // iTunes track ID (itunes_xxx)
@@ -378,6 +384,10 @@ export interface HipsterCurrentTurn {
   bonusGuess: HipsterBonusGuess | null;
   bonusCorrect: boolean | null;
   startedAt: number;
+  // Intercept phase fields
+  intercepts: HipsterIntercept[];      // List of intercepts from other players
+  interceptDeadline: number | null;    // Unix timestamp when intercept phase ends
+  interceptWinner: string | null;      // Player ID who won via intercept (null if original wins)
 }
 
 export interface HipsterGameState {
@@ -420,10 +430,11 @@ export interface SpotifyTrackSearch {
 export const HIPSTER_CONFIG = {
   minPlayers: 2,
   maxPlayers: 12,
-  defaultSongsPerPlayer: 10,
+  defaultSongsPerPlayer: 5,     // Each player adds 5 songs, system adds 5 random per player
   defaultCardsToWin: 10,
-  minSongsPerPlayer: 5,
-  maxSongsPerPlayer: 15,
+  minSongsPerPlayer: 3,
+  maxSongsPerPlayer: 10,
+  randomSongsPerPlayer: 5,      // Random songs from curated catalog
   listenDuration: 30000,        // 30 seconds to listen
   guessDuration: 60000,         // 60 seconds to guess position
   bonusDuration: 30000,         // 30 seconds for bonus guess
