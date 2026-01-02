@@ -448,28 +448,29 @@ export default function TheMindRoom() {
         </motion.div>
       )}
 
-      {/* Card played notification */}
+      {/* Card played notification - positioned at bottom to avoid UI overlap */}
       <AnimatePresence>
         {cardPlayedNotification && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-40"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 50 }}
+            transition={{ type: 'spring', damping: 20 }}
+            className="fixed bottom-32 right-4 z-40"
           >
-            <div className="bg-slate-800/90 backdrop-blur-sm border border-sky-500/30 rounded-2xl px-6 py-3 shadow-2xl">
+            <div className="bg-slate-900/95 backdrop-blur-md border border-emerald-500/40 rounded-xl px-4 py-3 shadow-xl shadow-emerald-500/10">
               <div className="flex items-center gap-3">
                 <motion.div
-                  className="w-10 h-14 bg-gradient-to-br from-sky-400 to-emerald-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg"
-                  initial={{ rotateY: 180 }}
-                  animate={{ rotateY: 0 }}
-                  transition={{ duration: 0.3 }}
+                  className="w-8 h-11 bg-gradient-to-br from-emerald-500 to-sky-500 rounded-md flex items-center justify-center text-white font-bold text-sm shadow-lg"
+                  initial={{ scale: 0.5 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', damping: 10 }}
                 >
                   {cardPlayedNotification.cardValue}
                 </motion.div>
-                <div>
-                  <p className="text-sky-300 font-medium">{cardPlayedNotification.playerName}</p>
-                  <p className="text-slate-400 text-sm">ha jugado <span className="text-white font-bold">{cardPlayedNotification.cardValue}</span></p>
+                <div className="text-sm">
+                  <p className="text-emerald-400 font-medium">{cardPlayedNotification.playerName}</p>
+                  <p className="text-slate-500">jugó {cardPlayedNotification.cardValue}</p>
                 </div>
               </div>
             </div>
