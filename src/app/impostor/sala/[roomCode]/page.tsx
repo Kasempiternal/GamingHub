@@ -15,6 +15,7 @@ import {
   QRCode,
 } from '@/components/impostor';
 import { ImpostorBackground, EmergencyMeeting } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 import type { ImpostorPlayer } from '@/types/game';
 
 export default function ImpostorRoom() {
@@ -111,6 +112,9 @@ export default function ImpostorRoom() {
   return (
     <main className="min-h-screen pb-20 safe-area-top safe-area-bottom relative overflow-hidden">
       <ImpostorBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="impostor" roomCode={roomCode} />
 
       {/* Emergency Meeting Animation */}
       <EmergencyMeeting

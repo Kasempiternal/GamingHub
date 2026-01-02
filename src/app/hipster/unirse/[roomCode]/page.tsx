@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useHipster } from '@/hooks/useHipster';
 import { HIPSTER_AVATARS } from '@/types/game';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 // Music-themed background
 function MusicBackground() {
@@ -134,6 +135,9 @@ export default function JoinHipster() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
       <MusicBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="hipster" roomCode={roomCode} />
 
       {/* Back button */}
       <div className="absolute top-6 left-4 z-10">

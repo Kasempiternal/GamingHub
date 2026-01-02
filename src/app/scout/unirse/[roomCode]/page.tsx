@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useScout } from '@/hooks/useScout';
 import { CircusBackground } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 export default function JoinScout() {
   const params = useParams();
@@ -78,6 +79,9 @@ export default function JoinScout() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
       <CircusBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="scout" roomCode={roomCode} />
 
       {/* Back button */}
       <div className="absolute top-6 left-4 z-10">

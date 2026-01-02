@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { SpyBackground } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 export default function UnirsePartida() {
   const router = useRouter();
@@ -123,6 +124,9 @@ export default function UnirsePartida() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
       <SpyBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="codigo-secreto" roomCode={roomCode} />
 
       {/* Back button */}
       <div className="absolute top-6 left-4 z-10">

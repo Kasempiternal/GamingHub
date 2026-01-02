@@ -18,6 +18,7 @@ import {
   SpymasterProposalWarning,
 } from '@/components/codigo-secreto';
 import { SpyBackground } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 import type { Team, Role } from '@/types/game';
 
 export default function CodigoSecretoRoom() {
@@ -254,6 +255,9 @@ export default function CodigoSecretoRoom() {
   return (
     <main className={`min-h-screen p-2 sm:p-4 no-bounce safe-area-top safe-area-bottom ${game.phase === 'playing' && player?.team ? 'pt-16' : ''}`}>
       <SpyBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="codigo-secreto" roomCode={roomCode} />
 
       {game.phase === 'playing' && player?.team && (
         <TeamIndicator

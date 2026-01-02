@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useHipster } from '@/hooks/useHipster';
 import type { HipsterSong, HipsterPlayer } from '@/types/game';
 import { HIPSTER_CONFIG } from '@/types/game';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 // Music-themed animated background
 function MusicBackground() {
@@ -484,6 +485,7 @@ export default function HipsterRoom() {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <MusicBackground />
+        <NavigationMenu currentGame="hipster" roomCode={roomCode} />
         <div className="text-center">
           {loading ? (
             <motion.div
@@ -508,6 +510,7 @@ export default function HipsterRoom() {
     return (
       <main className="min-h-screen p-4 safe-area-top safe-area-bottom">
         <MusicBackground />
+        <NavigationMenu currentGame="hipster" roomCode={roomCode} />
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -596,6 +599,7 @@ export default function HipsterRoom() {
     return (
       <main className="min-h-screen p-4 safe-area-top safe-area-bottom">
         <MusicBackground />
+        <NavigationMenu currentGame="hipster" roomCode={roomCode} />
 
         <div className="max-w-md mx-auto space-y-4">
           {/* Header */}
@@ -682,6 +686,7 @@ export default function HipsterRoom() {
     return (
       <main className="min-h-screen p-4 safe-area-top safe-area-bottom">
         <MusicBackground />
+        <NavigationMenu currentGame="hipster" roomCode={roomCode} />
 
         <div className="max-w-md mx-auto space-y-4">
           {/* Turn Banner */}
@@ -1123,6 +1128,7 @@ export default function HipsterRoom() {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4">
         <MusicBackground />
+        <NavigationMenu currentGame="hipster" roomCode={roomCode} />
 
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}

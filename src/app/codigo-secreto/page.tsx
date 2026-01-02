@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { TOTAL_WORDS } from '@/data/words';
 import { RulesModal, RulesButton } from '@/components/codigo-secreto';
 import { SpyBackground } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 export default function CodigoSecretoHome() {
   const router = useRouter();
@@ -91,6 +92,9 @@ export default function CodigoSecretoHome() {
     <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
       {/* Spy Theme Background */}
       <SpyBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="codigo-secreto" />
 
       <div className="relative z-10 w-full max-w-md">
         {/* Back to hub */}

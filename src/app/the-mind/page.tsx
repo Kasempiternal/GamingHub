@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useTheMind } from '@/hooks/useTheMind';
 import { RulesModal, HelpButton } from '@/components/the-mind';
 import { TelepathyBackground } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 export default function TheMindHome() {
   const router = useRouter();
@@ -38,6 +39,9 @@ export default function TheMindHome() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
       <TelepathyBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="the-mind" />
 
       {/* Header with back button */}
       <div className="absolute top-6 left-4 z-10">

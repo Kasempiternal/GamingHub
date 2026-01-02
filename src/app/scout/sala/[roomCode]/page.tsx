@@ -20,6 +20,7 @@ import {
   HelpButton,
 } from '@/components/scout';
 import { CircusBackground, CircusConfetti } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 import type { ScoutCard, ScoutPlayer } from '@/types/game';
 
 export default function ScoutRoom() {
@@ -256,6 +257,9 @@ export default function ScoutRoom() {
     <main className="min-h-screen flex flex-col px-4 py-6 safe-area-top safe-area-bottom relative overflow-hidden">
       <CircusBackground />
       <CircusConfetti isActive={showConfetti} />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="scout" roomCode={roomCode} />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4 relative z-10">

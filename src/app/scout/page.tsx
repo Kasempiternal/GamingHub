@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useScout } from '@/hooks/useScout';
 import { RulesModal, HelpButton } from '@/components/scout';
 import { CircusBackground } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 export default function ScoutHome() {
   const router = useRouter();
@@ -38,6 +39,9 @@ export default function ScoutHome() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
       <CircusBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="scout" />
 
       {/* Header with back button */}
       <div className="absolute top-6 left-4 z-10">

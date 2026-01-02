@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useHipster } from '@/hooks/useHipster';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 // Music-themed animated background
 function MusicBackground() {
@@ -123,6 +124,9 @@ export default function HipsterHome() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom relative overflow-hidden">
       <MusicBackground />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="hipster" />
 
       {/* Header with back button */}
       <div className="absolute top-6 left-4 z-10">

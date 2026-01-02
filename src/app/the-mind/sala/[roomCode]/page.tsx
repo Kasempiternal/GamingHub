@@ -17,6 +17,7 @@ import {
   QRCode,
 } from '@/components/the-mind';
 import { TelepathyBackground, SyncPulse } from '@/components/themes';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 import type { TheMindPlayer } from '@/types/game';
 
 export default function TheMindRoom() {
@@ -124,6 +125,9 @@ export default function TheMindRoom() {
     <main className="min-h-screen flex flex-col px-4 py-6 safe-area-top safe-area-bottom">
       <TelepathyBackground intensity={game.phase === 'playing' ? 'high' : 'medium'} />
       <SyncPulse isActive={showSync} />
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="the-mind" roomCode={roomCode} />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">

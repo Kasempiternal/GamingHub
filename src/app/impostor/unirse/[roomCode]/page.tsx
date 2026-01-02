@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { NavigationMenu } from '@/components/shared/NavigationMenu';
 
 export default function UnirseImpostor() {
   const router = useRouter();
@@ -126,6 +127,9 @@ export default function UnirseImpostor() {
         <div className="absolute top-10 left-10 w-32 h-32 bg-red-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-10 right-10 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl"></div>
       </div>
+
+      {/* Navigation Menu */}
+      <NavigationMenu currentGame="impostor" roomCode={roomCode} />
 
       <div className="relative z-10 w-full max-w-md">
         {/* Back link */}
