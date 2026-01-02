@@ -116,10 +116,11 @@ function AudioPlayer({ previewUrl, isPlaying, onEnded }: {
 }
 
 // Song Search Component - Uses iTunes API
-function SongSearch({ onAddSong, addedSongs, maxSongs }: {
+function SongSearch({ onAddSong, addedSongs, maxSongs, addedSongIds }: {
   onAddSong: (song: Omit<HipsterSong, 'addedBy' | 'addedAt'>) => void;
   addedSongs: number;
   maxSongs: number;
+  addedSongIds: string[];
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Omit<HipsterSong, 'addedBy' | 'addedAt'>[]>([]);
@@ -151,6 +152,9 @@ function SongSearch({ onAddSong, addedSongs, maxSongs }: {
     return () => clearTimeout(timer);
   }, [query, search]);
 
+  // Filter out already-added songs
+  const filteredResults = results.filter(track => !addedSongIds.includes(track.id));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -177,11 +181,12 @@ function SongSearch({ onAddSong, addedSongs, maxSongs }: {
       )}
 
       <div className="space-y-2 max-h-64 overflow-y-auto">
-        {results.map((track) => (
+        {filteredResults.map((track) => (
           <motion.div
             key={track.id}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
             className="flex items-center gap-3 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/20 transition-colors"
           >
             <img src={track.albumArt} alt="" className="w-12 h-12 rounded-lg" />
@@ -198,6 +203,11 @@ function SongSearch({ onAddSong, addedSongs, maxSongs }: {
             </button>
           </motion.div>
         ))}
+        {!searching && query.length >= 2 && filteredResults.length === 0 && results.length > 0 && (
+          <p className="text-purple-400/50 text-sm text-center py-2">
+            Todas las canciones ya fueron añadidas
+          </p>
+        )}
       </div>
     </div>
   );
@@ -231,7 +241,7 @@ function PlayerList({ players, currentPlayerId }: { players: HipsterPlayer[]; cu
   );
 }
 
-// Timeline Component
+// Timeline Component - Groups same-year songs together
 function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive }: {
   timeline: { song: HipsterSong }[];
   onSelectPosition?: (position: number) => void;
@@ -248,8 +258,25 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
     );
   }
 
+  // Group cards by year
+  const yearGroups: { year: number; cards: { song: HipsterSong }[]; startIndex: number }[] = [];
+  let currentGroup: { year: number; cards: { song: HipsterSong }[]; startIndex: number } | null = null;
+
+  sortedTimeline.forEach((card, index) => {
+    if (!currentGroup || currentGroup.year !== card.song.releaseYear) {
+      currentGroup = { year: card.song.releaseYear, cards: [card], startIndex: index };
+      yearGroups.push(currentGroup);
+    } else {
+      currentGroup.cards.push(card);
+    }
+  });
+
   return (
-    <div className="flex gap-2 overflow-x-auto py-4 px-2">
+    <div
+      className="flex gap-2 overflow-x-auto py-4 px-2 scrollbar-hide"
+      style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+    >
+      {/* Insert before first year */}
       {isInteractive && (
         <motion.button
           whileHover={{ scale: 1.05 }}
@@ -263,31 +290,72 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
         </motion.button>
       )}
 
-      {sortedTimeline.map((card, index) => (
-        <div key={card.song.id} className="flex items-center gap-2">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex-shrink-0 w-20 bg-purple-500/20 border border-purple-500/30 rounded-lg p-2 text-center"
-          >
-            <img src={card.song.albumArt} alt="" className="w-full aspect-square rounded-md mb-1" />
-            <p className="text-white text-xs font-bold">{card.song.releaseYear}</p>
-          </motion.div>
+      {yearGroups.map((group, groupIndex) => {
+        // Position after this group (for inserting between groups)
+        const positionAfterGroup = group.startIndex + group.cards.length;
+        // Position to add to this year group (same year placement)
+        const positionInGroup = group.startIndex + group.cards.length;
 
-          {isInteractive && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onSelectPosition?.(index + 1)}
-              className={`flex-shrink-0 w-16 h-24 rounded-lg border-2 border-dashed flex items-center justify-center ${
-                selectedPosition === index + 1 ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
-              }`}
+        return (
+          <div key={group.year} className="flex items-center gap-2 flex-shrink-0">
+            {/* Year group - stacked if multiple cards */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-2 text-center ${
+                isInteractive ? 'cursor-pointer hover:bg-purple-500/30 transition-colors' : ''
+              } ${selectedPosition === positionInGroup ? 'ring-2 ring-purple-400 bg-purple-400/20' : ''}`}
+              onClick={() => isInteractive && onSelectPosition?.(positionInGroup)}
+              style={{ minWidth: group.cards.length > 1 ? '5.5rem' : '5rem' }}
             >
-              <span className="text-purple-400/50 text-2xl">→</span>
-            </motion.button>
-          )}
-        </div>
-      ))}
+              {/* Stacked album arts for same-year songs */}
+              <div className={`relative ${group.cards.length > 1 ? 'h-20' : ''}`}>
+                {group.cards.map((card, cardIndex) => (
+                  <img
+                    key={card.song.id}
+                    src={card.song.albumArt}
+                    alt=""
+                    className={`rounded-md ${
+                      group.cards.length > 1
+                        ? 'absolute w-14 h-14 border-2 border-slate-900'
+                        : 'w-full aspect-square'
+                    }`}
+                    style={
+                      group.cards.length > 1
+                        ? {
+                            left: `${cardIndex * 12}px`,
+                            top: `${cardIndex * 8}px`,
+                            zIndex: cardIndex,
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+              <p className="text-white text-xs font-bold mt-1">
+                {group.year}
+                {group.cards.length > 1 && (
+                  <span className="text-purple-400/60 ml-1">×{group.cards.length}</span>
+                )}
+              </p>
+            </motion.div>
+
+            {/* Insert slot between year groups (not between same-year cards) */}
+            {isInteractive && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onSelectPosition?.(positionAfterGroup)}
+                className={`flex-shrink-0 w-16 h-24 rounded-lg border-2 border-dashed flex items-center justify-center ${
+                  selectedPosition === positionAfterGroup ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
+                }`}
+              >
+                <span className="text-purple-400/50 text-2xl">→</span>
+              </motion.button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -308,6 +376,8 @@ export default function HipsterRoom() {
     addSong,
     playerReady,
     startGame,
+    startListening,
+    skipTurn,
     submitGuess,
     submitBonus,
     skipBonus,
@@ -318,6 +388,7 @@ export default function HipsterRoom() {
   } = useHipster();
 
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [guessCountdown, setGuessCountdown] = useState<number>(0);
 
   // Stop audio when turn phase changes
   useEffect(() => {
@@ -351,6 +422,30 @@ export default function HipsterRoom() {
     const interval = setInterval(updateCountdown, 100);
     return () => clearInterval(interval);
   }, [game?.currentTurn?.phase, game?.currentTurn?.interceptDeadline, game?.currentTurn?.playerId, playerId, resolveIntercept]);
+
+  // Guess countdown timer (60 seconds)
+  useEffect(() => {
+    if (game?.currentTurn?.phase !== 'guessing' || !game?.currentTurn?.guessDeadline) {
+      setGuessCountdown(0);
+      return;
+    }
+
+    const isCurrentPlayersTurn = game?.currentTurn?.playerId === playerId;
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((game.currentTurn!.guessDeadline! - Date.now()) / 1000));
+      setGuessCountdown(remaining);
+
+      // Auto-skip turn when countdown reaches 0
+      if (remaining === 0 && isCurrentPlayersTurn) {
+        skipTurn();
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 100);
+    return () => clearInterval(interval);
+  }, [game?.currentTurn?.phase, game?.currentTurn?.guessDeadline, game?.currentTurn?.playerId, playerId, skipTurn]);
 
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   const [bonusArtist, setBonusArtist] = useState('');
@@ -503,6 +598,7 @@ export default function HipsterRoom() {
               onAddSong={(song) => addSong(song)}
               addedSongs={currentPlayer?.songsAdded ?? 0}
               maxSongs={game.songsPerPlayer}
+              addedSongIds={game.songPool.map(s => s.id)}
             />
           </div>
 
@@ -574,13 +670,40 @@ export default function HipsterRoom() {
         <MusicBackground />
 
         <div className="max-w-md mx-auto space-y-4">
-          {/* Turn Info */}
-          <div className="text-center">
-            <p className="text-purple-400/60 text-sm">Turno de</p>
-            <h2 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
-              <span className="text-3xl">{turnPlayer?.avatar}</span>
-              {turnPlayer?.name}
-            </h2>
+          {/* Turn Banner */}
+          <div className={`p-4 rounded-xl ${
+            isMyTurn ? 'bg-green-500/20 border-2 border-green-500' : 'bg-purple-500/10 border border-purple-500/20'
+          }`}>
+            {isMyTurn ? (
+              <div className="text-center">
+                <span className="text-3xl">🎯</span>
+                <p className="text-green-400 font-bold text-lg">¡ES TU TURNO!</p>
+                <p className="text-green-300/70 text-sm">
+                  {game.currentTurn.phase === 'listening' && 'Escucha la cancion y prepara tu respuesta'}
+                  {game.currentTurn.phase === 'guessing' && 'Selecciona donde va en tu linea temporal'}
+                  {game.currentTurn.phase === 'intercepting' && 'Esperando interceptaciones...'}
+                  {game.currentTurn.phase === 'bonus' && 'Adivina artista y titulo para ganar token'}
+                  {game.currentTurn.phase === 'result' && 'Revisa el resultado'}
+                </p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-purple-400/60 text-sm">Turno de</p>
+                <h2 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
+                  <span className="text-3xl">{turnPlayer?.avatar}</span>
+                  {turnPlayer?.name}
+                </h2>
+              </div>
+            )}
+          </div>
+
+          {/* Phase Progress Indicator */}
+          <div className="flex justify-between text-xs px-2">
+            <span className={game.currentTurn.phase === 'listening' ? 'text-purple-300 font-bold' : 'text-purple-400/40'}>🎧 Escuchar</span>
+            <span className={game.currentTurn.phase === 'guessing' ? 'text-purple-300 font-bold' : 'text-purple-400/40'}>🎯 Colocar</span>
+            <span className={game.currentTurn.phase === 'intercepting' ? 'text-yellow-300 font-bold' : 'text-purple-400/40'}>⚡ Intercep.</span>
+            <span className={game.currentTurn.phase === 'bonus' ? 'text-green-300 font-bold' : 'text-purple-400/40'}>🎁 Bonus</span>
+            <span className={game.currentTurn.phase === 'result' ? 'text-purple-300 font-bold' : 'text-purple-400/40'}>📊 Result</span>
           </div>
 
           {/* Current Song - visible to ALL players during listening/guessing/intercepting */}
@@ -605,28 +728,53 @@ export default function HipsterRoom() {
                 />
               </div>
 
-              {/* Play/Pause Button */}
-              <button
-                onClick={() => setIsAudioPlaying(!isAudioPlaying)}
-                className="mb-3 px-6 py-2 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 hover:bg-purple-500/30 transition-colors"
-              >
-                {isAudioPlaying ? '⏸ Pausar' : '▶ Reproducir'}
-              </button>
-
+              {/* Play/Pause Button - Only turn player can control */}
               {isMyTurn ? (
                 <>
+                  <button
+                    onClick={() => {
+                      if (!isAudioPlaying && game.currentTurn?.phase === 'listening') {
+                        startListening();
+                      }
+                      setIsAudioPlaying(!isAudioPlaying);
+                    }}
+                    className="mb-3 px-6 py-2 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 hover:bg-purple-500/30 transition-colors"
+                  >
+                    {isAudioPlaying ? '⏸ Pausar' : '▶ Reproducir'}
+                  </button>
+
+                  {/* Countdown Timer */}
+                  {guessCountdown > 0 && (
+                    <motion.div
+                      className={`text-3xl font-bold mb-2 ${guessCountdown <= 10 ? 'text-red-400' : guessCountdown <= 30 ? 'text-yellow-400' : 'text-green-400'}`}
+                      animate={guessCountdown <= 10 ? { scale: [1, 1.1, 1] } : {}}
+                      transition={{ duration: 0.5, repeat: guessCountdown <= 10 ? Infinity : 0 }}
+                    >
+                      ⏱️ {guessCountdown}s
+                    </motion.div>
+                  )}
+
                   <p className="text-purple-300 font-medium">
-                    {isAudioPlaying ? 'Escuchando...' : 'Presiona reproducir'}
+                    {game.currentTurn.phase === 'listening'
+                      ? (isAudioPlaying ? 'Escuchando...' : 'Presiona reproducir para empezar')
+                      : 'Selecciona la posicion en tu linea temporal'
+                    }
                   </p>
                   <p className="text-purple-400/50 text-sm mt-1">Coloca esta cancion en tu linea temporal</p>
                 </>
               ) : (
-                <p className="text-purple-400/50 text-sm">
-                  {game.currentTurn.phase === 'intercepting'
-                    ? 'Puedes interceptar si crees saber la posicion correcta'
-                    : `Esperando a que ${turnPlayer?.name} coloque la cancion...`
-                  }
-                </p>
+                <div className="space-y-2">
+                  {/* Audio status for non-turn players */}
+                  <div className={`text-sm ${isAudioPlaying ? 'text-purple-300' : 'text-purple-400/60'}`}>
+                    {isAudioPlaying ? '🎵 Reproduciendo...' : '⏸ Esperando reproduccion...'}
+                  </div>
+                  <p className="text-purple-400/50 text-sm">
+                    {game.currentTurn.phase === 'intercepting'
+                      ? 'Puedes interceptar si crees saber la posicion correcta'
+                      : `Esperando a que ${turnPlayer?.name} coloque la cancion...`
+                    }
+                  </p>
+                </div>
               )}
             </div>
           )}

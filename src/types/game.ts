@@ -384,6 +384,7 @@ export interface HipsterCurrentTurn {
   bonusGuess: HipsterBonusGuess | null;
   bonusCorrect: boolean | null;
   startedAt: number;
+  guessDeadline: number | null;        // Unix timestamp when player must guess by (60s timer)
   // Intercept phase fields
   intercepts: HipsterIntercept[];      // List of intercepts from other players
   interceptDeadline: number | null;    // Unix timestamp when intercept phase ends

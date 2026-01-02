@@ -219,7 +219,8 @@ function checkGuessCorrect(
   // Insert at position
   testTimeline.splice(guessedPosition, 0, newCard);
 
-  // Check if timeline is in chronological order
+  // Check if timeline is in chronological order (non-decreasing)
+  // Uses > not >= so same-year songs ARE allowed (multiple valid positions)
   for (let i = 0; i < testTimeline.length - 1; i++) {
     if (testTimeline[i].song.releaseYear > testTimeline[i + 1].song.releaseYear) {
       return false;
@@ -338,6 +339,10 @@ export async function POST(request: NextRequest) {
         return handleIntercept(roomCode, playerId, data.position);
       case 'resolveIntercept':
         return handleResolveIntercept(roomCode, playerId);
+      case 'startListening':
+        return handleStartListening(roomCode, playerId);
+      case 'skipTurn':
+        return handleSkipTurn(roomCode, playerId);
       case 'reset':
         return handleReset(roomCode, playerId);
       default:
@@ -647,6 +652,7 @@ async function handleStartGame(roomCode: string, playerId: string) {
       bonusGuess: null,
       bonusCorrect: null,
       startedAt: Date.now(),
+      guessDeadline: null,
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
@@ -674,12 +680,23 @@ async function handleSubmitGuess(roomCode: string, playerId: string, position: n
   const player = game.players.find(p => p.id === playerId);
   if (!player) return error('Jugador no encontrado');
 
-  // Don't reveal if correct yet - enter intercepting phase first
+  // Check if guess is correct immediately
+  const isCorrect = checkGuessCorrect(player.timeline, game.currentTurn.song, position);
   game.currentTurn.guessedPosition = position;
-  game.currentTurn.phase = 'intercepting';
+  game.currentTurn.isCorrect = isCorrect;
   game.currentTurn.intercepts = [];
-  game.currentTurn.interceptDeadline = Date.now() + 10000; // 10 second window
   game.currentTurn.interceptWinner = null;
+
+  if (isCorrect) {
+    // Correct guess - skip intercept phase, go directly to bonus
+    game.currentTurn.phase = 'bonus';
+    game.currentTurn.interceptDeadline = null;
+    // Card is added after bonus phase (to hide album art during bonus)
+  } else {
+    // Wrong guess - allow intercepts
+    game.currentTurn.phase = 'intercepting';
+    game.currentTurn.interceptDeadline = Date.now() + 10000; // 10 second window
+  }
 
   game.lastActivity = Date.now();
   await setGame(game.roomCode, game);
@@ -858,6 +875,7 @@ async function handleNextTurn(roomCode: string, playerId: string) {
       bonusGuess: null,
       bonusCorrect: null,
       startedAt: Date.now(),
+      guessDeadline: null,
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
@@ -1010,6 +1028,87 @@ async function handleResolveIntercept(roomCode: string, playerId: string) {
     // Nobody got it right, card is discarded
     game.currentTurn.phase = 'result';
     game.currentTurn.interceptWinner = null;
+  }
+
+  game.lastActivity = Date.now();
+  await setGame(game.roomCode, game);
+
+  return success({ game });
+}
+
+async function handleStartListening(roomCode: string, playerId: string) {
+  const game = await getGame(roomCode);
+  if (!game) return error('Sala no encontrada');
+
+  if (!game.currentTurn || game.currentTurn.playerId !== playerId) {
+    return error('No es tu turno');
+  }
+
+  if (game.currentTurn.phase !== 'listening') {
+    return error('Ya has empezado a escuchar');
+  }
+
+  // Start 60-second countdown for guessing
+  game.currentTurn.phase = 'guessing';
+  game.currentTurn.guessDeadline = Date.now() + 60000; // 60 seconds
+
+  game.lastActivity = Date.now();
+  await setGame(game.roomCode, game);
+
+  return success({ game });
+}
+
+async function handleSkipTurn(roomCode: string, playerId: string) {
+  const game = await getGame(roomCode);
+  if (!game) return error('Sala no encontrada');
+
+  if (!game.currentTurn) {
+    return error('No hay turno activo');
+  }
+
+  // Only the current player can skip their own turn (when timer expires)
+  if (game.currentTurn.playerId !== playerId) {
+    return error('No puedes saltar el turno de otro jugador');
+  }
+
+  // Mark the song as used (discarded)
+  game.usedSongs.push(game.currentTurn.song.id);
+
+  // Advance to next player
+  game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.turnOrder.length;
+  const nextPlayerId = game.turnOrder[game.currentPlayerIndex];
+
+  // Draw new song for next player
+  const nextSong = drawSongForPlayer(game.songPool, game.usedSongs, nextPlayerId);
+
+  if (nextSong) {
+    game.currentTurn = {
+      playerId: nextPlayerId,
+      song: nextSong,
+      phase: 'listening',
+      guessedPosition: null,
+      isCorrect: null,
+      bonusGuess: null,
+      bonusCorrect: null,
+      startedAt: Date.now(),
+      guessDeadline: null,
+      intercepts: [],
+      interceptDeadline: null,
+      interceptWinner: null,
+    };
+  } else {
+    // No more songs, end game
+    let maxCards = 0;
+    let winnerId = game.players[0].id;
+    for (const p of game.players) {
+      if (p.timeline.length > maxCards) {
+        maxCards = p.timeline.length;
+        winnerId = p.id;
+      }
+    }
+    game.winner = winnerId;
+    game.phase = 'finished';
+    game.currentTurn = null;
   }
 
   game.lastActivity = Date.now();

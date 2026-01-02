@@ -23,6 +23,8 @@ interface UseHipsterResult {
   playerReady: () => Promise<boolean>;
   // Game actions
   startGame: () => Promise<boolean>;
+  startListening: () => Promise<boolean>;
+  skipTurn: () => Promise<boolean>;
   submitGuess: (position: number) => Promise<boolean>;
   submitBonus: (artist: string, title: string) => Promise<boolean>;
   skipBonus: () => Promise<boolean>;
@@ -187,6 +189,14 @@ export function useHipster(): UseHipsterResult {
     return apiCall('startGame');
   }, [apiCall]);
 
+  const startListening = useCallback(async (): Promise<boolean> => {
+    return apiCall('startListening');
+  }, [apiCall]);
+
+  const skipTurn = useCallback(async (): Promise<boolean> => {
+    return apiCall('skipTurn');
+  }, [apiCall]);
+
   const submitGuess = useCallback(async (position: number): Promise<boolean> => {
     return apiCall('submitGuess', { position });
   }, [apiCall]);
@@ -234,6 +244,8 @@ export function useHipster(): UseHipsterResult {
     removeSong,
     playerReady,
     startGame,
+    startListening,
+    skipTurn,
     submitGuess,
     submitBonus,
     skipBonus,
