@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ImpostorPlayer } from '@/types/game';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface RevealAnimationProps {
   player: ImpostorPlayer;
@@ -12,20 +12,26 @@ interface RevealAnimationProps {
 export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
   const [stage, setStage] = useState<'drumroll' | 'reveal' | 'role'>('drumroll');
 
+  // Use ref to store callback to avoid dependency issues
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
   useEffect(() => {
     // Drumroll phase
     const timer1 = setTimeout(() => setStage('reveal'), 2000);
     // Role reveal phase
     const timer2 = setTimeout(() => setStage('role'), 3500);
-    // Complete
-    const timer3 = setTimeout(() => onComplete?.(), 6000);
+    // Complete - call the callback after animation finishes
+    const timer3 = setTimeout(() => {
+      onCompleteRef.current?.();
+    }, 6000);
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
     };
-  }, [onComplete]);
+  }, []); // Empty deps - runs once on mount
 
   const getRoleColor = () => {
     switch (player.role) {
@@ -184,19 +190,27 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
                   bg-gradient-to-br ${getRoleColor()}
                   flex flex-col items-center justify-center gap-4 p-6
                 `}
+                initial={{
+                  boxShadow: player.role === 'impostor'
+                    ? '0 0 20px rgba(220, 38, 38, 0.5)'
+                    : player.role === 'mr-white'
+                    ? '0 0 20px rgba(156, 163, 175, 0.5)'
+                    : '0 0 20px rgba(34, 197, 94, 0.5)',
+                }}
                 animate={{
                   boxShadow: player.role === 'impostor'
-                    ? ['0 0 20px rgba(220, 38, 38, 0.5)', '0 0 60px rgba(220, 38, 38, 0.8)', '0 0 20px rgba(220, 38, 38, 0.5)']
+                    ? ['0 0 20px rgba(220, 38, 38, 0.5)', '0 0 60px rgba(220, 38, 38, 0.8)', '0 0 40px rgba(220, 38, 38, 0.6)']
                     : player.role === 'mr-white'
-                    ? ['0 0 20px rgba(156, 163, 175, 0.5)', '0 0 60px rgba(156, 163, 175, 0.8)', '0 0 20px rgba(156, 163, 175, 0.5)']
-                    : ['0 0 20px rgba(34, 197, 94, 0.5)', '0 0 60px rgba(34, 197, 94, 0.8)', '0 0 20px rgba(34, 197, 94, 0.5)'],
+                    ? ['0 0 20px rgba(156, 163, 175, 0.5)', '0 0 60px rgba(156, 163, 175, 0.8)', '0 0 40px rgba(156, 163, 175, 0.6)']
+                    : ['0 0 20px rgba(34, 197, 94, 0.5)', '0 0 60px rgba(34, 197, 94, 0.8)', '0 0 40px rgba(34, 197, 94, 0.6)'],
                 }}
-                transition={{ duration: 1, repeat: Infinity }}
+                transition={{ duration: 1.5, ease: 'easeOut' }}
               >
                 <motion.span
                   className="text-7xl"
-                  animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 0.5, repeat: Infinity }}
+                  initial={{ scale: 0.5, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ duration: 0.5, type: 'spring' }}
                 >
                   {getRoleEmoji()}
                 </motion.span>
@@ -208,9 +222,9 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
 
                 <motion.p
                   className="text-white font-bold text-lg text-center"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
                 >
                   {getRoleText()}
                 </motion.p>
@@ -220,14 +234,14 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
                     className="text-white/70 text-sm"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.7 }}
+                    transition={{ delay: 0.5 }}
                   >
                     Palabra: {player.word}
                   </motion.p>
                 )}
               </motion.div>
 
-              {/* Floating particles for impostor reveal */}
+              {/* Floating particles for impostor reveal - plays once */}
               {player.role === 'impostor' && (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden">
                   {[...Array(20)].map((_, i) => (
@@ -238,6 +252,7 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
                         x: '50%',
                         y: '50%',
                         scale: 0,
+                        opacity: 0,
                       }}
                       animate={{
                         x: `${Math.random() * 100}%`,
@@ -248,7 +263,7 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
                       transition={{
                         duration: 2,
                         delay: i * 0.1,
-                        repeat: Infinity,
+                        ease: 'easeOut',
                       }}
                     />
                   ))}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ImpostorRole } from '@/types/game';
 
@@ -13,22 +13,36 @@ interface WordRevealProps {
 
 export function WordReveal({ word, hint, role, category }: WordRevealProps) {
   const [isRevealed, setIsRevealed] = useState(false);
-  const [dragProgress, setDragProgress] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
+  const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const maxRevealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const getRoleColor = () => {
-    switch (role) {
-      case 'impostor':
-        return 'from-red-600 to-red-800 border-red-500';
-      case 'mr-white':
-        return 'from-gray-400 to-gray-600 border-gray-300';
-      case 'civilian':
-        return 'from-green-600 to-green-800 border-green-500';
-      default:
-        return 'from-slate-600 to-slate-800 border-slate-500';
+  // Auto-hide after max reveal time (5 seconds)
+  useEffect(() => {
+    if (isRevealed) {
+      maxRevealTimeoutRef.current = setTimeout(() => {
+        setIsRevealed(false);
+      }, 5000);
     }
-  };
+
+    return () => {
+      if (maxRevealTimeoutRef.current) {
+        clearTimeout(maxRevealTimeoutRef.current);
+      }
+    };
+  }, [isRevealed]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (holdTimeoutRef.current) {
+        clearTimeout(holdTimeoutRef.current);
+      }
+      if (maxRevealTimeoutRef.current) {
+        clearTimeout(maxRevealTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const getRoleName = () => {
     switch (role) {
@@ -56,42 +70,30 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
     }
   };
 
-  const handleDragStart = () => {
-    if (!isRevealed) {
-      isDragging.current = true;
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsRevealed(true);
+  };
+
+  const handlePointerUp = () => {
+    setIsRevealed(false);
+    if (maxRevealTimeoutRef.current) {
+      clearTimeout(maxRevealTimeoutRef.current);
     }
   };
 
-  const handleDrag = (e: React.TouchEvent | React.MouseEvent) => {
-    if (!isDragging.current || !containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    let clientY: number;
-
-    if ('touches' in e) {
-      clientY = e.touches[0].clientY;
-    } else {
-      clientY = e.clientY;
-    }
-
-    const progress = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    setDragProgress(progress);
-
-    if (progress > 0.7) {
-      setIsRevealed(true);
-      isDragging.current = false;
+  const handlePointerLeave = () => {
+    setIsRevealed(false);
+    if (maxRevealTimeoutRef.current) {
+      clearTimeout(maxRevealTimeoutRef.current);
     }
   };
 
-  const handleDragEnd = () => {
-    isDragging.current = false;
-    if (!isRevealed) {
-      setDragProgress(0);
+  const handlePointerCancel = () => {
+    setIsRevealed(false);
+    if (maxRevealTimeoutRef.current) {
+      clearTimeout(maxRevealTimeoutRef.current);
     }
-  };
-
-  const handleClick = () => {
-    setIsRevealed(!isRevealed);
   };
 
   if (!role) {
@@ -106,22 +108,15 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
     <div className="relative">
       <motion.div
         ref={containerRef}
-        className={`
-          relative overflow-hidden rounded-2xl border-2 cursor-pointer
-          bg-gradient-to-br ${getRoleColor()}
-          ${!isRevealed ? 'select-none' : ''}
-        `}
-        onClick={handleClick}
-        onTouchStart={handleDragStart}
-        onTouchMove={handleDrag}
-        onTouchEnd={handleDragEnd}
-        onMouseDown={handleDragStart}
-        onMouseMove={handleDrag}
-        onMouseUp={handleDragEnd}
-        onMouseLeave={handleDragEnd}
+        className="relative overflow-hidden rounded-2xl border-2 cursor-pointer select-none bg-gradient-to-br from-slate-700 to-slate-900 border-slate-600"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
+        onPointerCancel={handlePointerCancel}
+        style={{ touchAction: 'none' }}
         whileTap={{ scale: 0.98 }}
       >
-        {/* Hidden content layer */}
+        {/* Content layer */}
         <div className="p-6 min-h-[180px] flex flex-col items-center justify-center">
           <AnimatePresence mode="wait">
             {!isRevealed ? (
@@ -132,52 +127,56 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
                 exit={{ opacity: 0, scale: 0.8 }}
                 className="text-center"
               >
+                {/* Fingerprint/hold icon */}
                 <motion.div
-                  className="text-6xl mb-4"
+                  className="text-5xl mb-4 opacity-60"
                   animate={{
-                    rotateY: [0, 180, 360],
-                    scale: [1, 1.1, 1]
+                    scale: [1, 1.1, 1],
                   }}
                   transition={{
-                    duration: 3,
+                    duration: 2,
                     repeat: Infinity,
                     ease: "easeInOut"
                   }}
                 >
-                  🎭
+                  👆
                 </motion.div>
-                <p className="text-white/80 font-medium mb-2">
-                  Toca para revelar tu rol
+                <p className="text-white/70 font-medium mb-1">
+                  Mantén presionado
                 </p>
-                <p className="text-white/50 text-sm">
-                  o desliza hacia abajo
+                <p className="text-white/40 text-sm">
+                  para ver tu rol
                 </p>
 
-                {/* Drag indicator */}
+                {/* Hold indicator ring */}
                 <motion.div
-                  className="mt-4 w-12 h-1 bg-white/30 rounded-full mx-auto"
-                  animate={{ y: [0, 8, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
+                  className="mt-4 w-16 h-16 mx-auto border-2 border-white/20 rounded-full flex items-center justify-center"
+                  animate={{
+                    borderColor: ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.4)', 'rgba(255,255,255,0.2)'],
+                  }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <div className="w-8 h-8 bg-white/10 rounded-full" />
+                </motion.div>
               </motion.div>
             ) : (
               <motion.div
                 key="revealed"
-                initial={{ opacity: 0, y: 20, rotateX: -90 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ type: 'spring', duration: 0.5 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.15 }}
                 className="text-center w-full"
               >
                 {/* Role badge */}
                 <motion.div
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black/30 mb-4"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.2, type: 'spring' }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black/40 mb-4"
+                  initial={{ y: -10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.05 }}
                 >
                   <span className="text-2xl">{getRoleIcon()}</span>
-                  <span className="font-bold text-white tracking-wider">
+                  <span className="font-bold text-white tracking-wider text-sm">
                     {getRoleName()}
                   </span>
                 </motion.div>
@@ -185,21 +184,21 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
                 {/* Word */}
                 {word ? (
                   <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.3, type: 'spring' }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
                   >
-                    <p className="text-white/60 text-sm mb-1">Tu palabra:</p>
-                    <p className="text-3xl font-bold text-white tracking-wide">
+                    <p className="text-white/50 text-xs mb-1">Tu palabra:</p>
+                    <p className="text-2xl font-bold text-white tracking-wide">
                       {word.toUpperCase()}
                     </p>
                   </motion.div>
                 ) : (
                   <motion.p
-                    className="text-white/70 text-lg"
+                    className="text-white/60 text-base"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3 }}
+                    transition={{ delay: 0.1 }}
                   >
                     No tienes palabra asignada
                   </motion.p>
@@ -208,83 +207,68 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
                 {/* Hint for impostors and mr white */}
                 {hint && (
                   <motion.div
-                    className="mt-4 px-4 py-2 rounded-lg bg-black/20"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
+                    className="mt-3 px-3 py-1.5 rounded-lg bg-black/30"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.15 }}
                   >
-                    <p className="text-white/60 text-xs mb-1">Pista:</p>
-                    <p className="text-yellow-300 font-medium">{hint}</p>
+                    <p className="text-white/40 text-xs mb-0.5">Pista:</p>
+                    <p className="text-amber-300/80 text-sm font-medium">{hint}</p>
                   </motion.div>
                 )}
 
                 {/* Category */}
                 {category && (
                   <motion.p
-                    className="mt-3 text-white/40 text-sm"
+                    className="mt-2 text-white/30 text-xs"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.6 }}
+                    transition={{ delay: 0.2 }}
                   >
-                    Categoria: {category}
+                    {category}
                   </motion.p>
                 )}
 
-                {/* Tap to hide */}
+                {/* Release indicator */}
                 <motion.p
-                  className="mt-4 text-white/40 text-xs"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.7 }}
+                  className="mt-3 text-white/30 text-xs"
+                  animate={{ opacity: [0.3, 0.6, 0.3] }}
+                  transition={{ duration: 1, repeat: Infinity }}
                 >
-                  Toca para ocultar
+                  Suelta para ocultar
                 </motion.p>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
-
-        {/* Drag overlay */}
-        {!isRevealed && dragProgress > 0 && (
-          <motion.div
-            className="absolute inset-0 bg-black/50 flex items-center justify-center"
-            style={{ opacity: dragProgress }}
-          >
-            <p className="text-white text-xl font-bold">
-              {dragProgress > 0.7 ? '¡Suelta!' : 'Sigue deslizando...'}
-            </p>
-          </motion.div>
-        )}
       </motion.div>
 
-      {/* Role-specific instructions */}
-      {isRevealed && (
-        <motion.div
-          className="mt-4 p-4 rounded-xl bg-slate-800/50 border border-slate-700"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-        >
-          {role === 'impostor' && (
-            <div className="text-sm text-slate-300">
-              <p className="text-red-400 font-semibold mb-1">🕵️ Tu mision:</p>
-              <p>Describe tu palabra sin que los civiles sospechen. Tu palabra es diferente a la de ellos!</p>
-            </div>
-          )}
-          {role === 'mr-white' && (
-            <div className="text-sm text-slate-300">
-              <p className="text-gray-300 font-semibold mb-1">👻 Tu mision:</p>
-              <p>No sabes la palabra. Usa la pista para adivinar y mezclarte con los civiles.</p>
-            </div>
-          )}
-          {role === 'civilian' && (
-            <div className="text-sm text-slate-300">
-              <p className="text-green-400 font-semibold mb-1">👤 Tu mision:</p>
-              <p>Describe tu palabra sin revelarla. Encuentra a los impostores por sus descripciones sospechosas!</p>
-            </div>
-          )}
-        </motion.div>
-      )}
+      {/* Role-specific instructions (always visible below card) */}
+      <motion.div
+        className="mt-4 p-4 rounded-xl bg-slate-800/50 border border-slate-700"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        {role === 'impostor' && (
+          <div className="text-sm text-slate-300">
+            <p className="text-slate-400 font-semibold mb-1">🎭 Tu mision:</p>
+            <p>Describe tu palabra sin que los civiles sospechen. Tu palabra es diferente a la de ellos!</p>
+          </div>
+        )}
+        {role === 'mr-white' && (
+          <div className="text-sm text-slate-300">
+            <p className="text-slate-400 font-semibold mb-1">🎭 Tu mision:</p>
+            <p>No sabes la palabra. Usa la pista para adivinar y mezclarte con los civiles.</p>
+          </div>
+        )}
+        {role === 'civilian' && (
+          <div className="text-sm text-slate-300">
+            <p className="text-slate-400 font-semibold mb-1">🎭 Tu mision:</p>
+            <p>Describe tu palabra sin revelarla. Encuentra a los impostores por sus descripciones sospechosas!</p>
+          </div>
+        )}
+      </motion.div>
     </div>
   );
 }
