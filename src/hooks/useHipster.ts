@@ -30,7 +30,8 @@ interface UseHipsterResult {
   skipBonus: () => Promise<boolean>;
   useToken: (targetPlayerId: string, cardIndex: number) => Promise<boolean>;
   // Intercept actions
-  intercept: (position: number) => Promise<boolean>;
+  intercept: (position: number | null) => Promise<boolean>;  // null for phase 1 (claiming), number for phase 2 (selecting)
+  interceptTimeout: () => Promise<boolean>;  // Called when selecting phase times out
   resolveIntercept: () => Promise<boolean>;
   nextTurn: () => Promise<boolean>;
   resetGame: () => Promise<boolean>;
@@ -214,8 +215,12 @@ export function useHipster(): UseHipsterResult {
   }, [apiCall]);
 
   // Intercept actions
-  const intercept = useCallback(async (position: number): Promise<boolean> => {
+  const intercept = useCallback(async (position: number | null): Promise<boolean> => {
     return apiCall('intercept', { position });
+  }, [apiCall]);
+
+  const interceptTimeout = useCallback(async (): Promise<boolean> => {
+    return apiCall('interceptTimeout');
   }, [apiCall]);
 
   const resolveIntercept = useCallback(async (): Promise<boolean> => {
@@ -251,6 +256,7 @@ export function useHipster(): UseHipsterResult {
     skipBonus,
     useToken,
     intercept,
+    interceptTimeout,
     resolveIntercept,
     nextTurn,
     resetGame,

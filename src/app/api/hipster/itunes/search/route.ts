@@ -19,6 +19,18 @@ interface iTunesSearchResponse {
   results: iTunesTrack[];
 }
 
+// Keywords to filter out non-original tracks (live, remix, etc.)
+const FILTERED_TRACK_KEYWORDS = [
+  'live', 'remix', 'acoustic', 'remaster', 'remastered',
+  'radio edit', 'extended', 'demo', 'cover', 'tribute',
+  'karaoke', 'instrumental', 'reprise', 'unplugged', 'session'
+];
+
+function isOriginalTrack(trackName: string): boolean {
+  const lowerName = trackName.toLowerCase();
+  return !FILTERED_TRACK_KEYWORDS.some(keyword => lowerName.includes(keyword));
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
@@ -51,9 +63,9 @@ export async function GET(request: NextRequest) {
 
     const data: iTunesSearchResponse = await response.json();
 
-    // Transform iTunes tracks to our format
+    // Transform iTunes tracks to our format (filter out live/remix versions)
     const tracks = data.results
-      .filter(track => track.previewUrl) // Only include tracks with previews
+      .filter(track => track.previewUrl && isOriginalTrack(track.trackName))
       .map(track => ({
         id: `itunes_${track.trackId}`,
         title: track.trackName,

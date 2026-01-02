@@ -116,6 +116,18 @@ function getRandomAvatar(usedAvatars: string[]): string {
   return available[Math.floor(Math.random() * available.length)];
 }
 
+// Keywords to filter out non-original tracks (live, remix, etc.)
+const FILTERED_TRACK_KEYWORDS = [
+  'live', 'remix', 'acoustic', 'remaster', 'remastered',
+  'radio edit', 'extended', 'demo', 'cover', 'tribute',
+  'karaoke', 'instrumental', 'reprise', 'unplugged', 'session'
+];
+
+function isOriginalTrack(trackName: string): boolean {
+  const lowerName = trackName.toLowerCase();
+  return !FILTERED_TRACK_KEYWORDS.some(keyword => lowerName.includes(keyword));
+}
+
 // Draw a song for a player (anti-cheat: exclude their contributions)
 function drawSongForPlayer(
   songPool: HipsterSong[],
@@ -156,7 +168,10 @@ async function fetchSongFromiTunes(songData: CuratedSongData): Promise<HipsterSo
     if (!response.ok) return null;
 
     const data = await response.json();
-    const track = data.results?.find((t: { previewUrl?: string }) => t.previewUrl);
+    // Find first track with preview that is NOT a live/remix version
+    const track = data.results?.find((t: { previewUrl?: string; trackName?: string }) =>
+      t.previewUrl && isOriginalTrack(t.trackName || '')
+    );
 
     if (!track) return null;
 
@@ -336,7 +351,9 @@ export async function POST(request: NextRequest) {
       case 'nextTurn':
         return handleNextTurn(roomCode, playerId);
       case 'intercept':
-        return handleIntercept(roomCode, playerId, data.position);
+        return handleIntercept(roomCode, playerId, data.position ?? null);
+      case 'interceptTimeout':
+        return handleInterceptTimeout(roomCode, playerId);
       case 'resolveIntercept':
         return handleResolveIntercept(roomCode, playerId);
       case 'startListening':
@@ -656,6 +673,10 @@ async function handleStartGame(roomCode: string, playerId: string) {
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
+      // Two-phase intercept fields
+      interceptPhase: null,
+      interceptingPlayerId: null,
+      selectingDeadline: null,
     };
   }
 
@@ -691,11 +712,17 @@ async function handleSubmitGuess(roomCode: string, playerId: string, position: n
     // Correct guess - skip intercept phase, go directly to bonus
     game.currentTurn.phase = 'bonus';
     game.currentTurn.interceptDeadline = null;
+    game.currentTurn.interceptPhase = null;
+    game.currentTurn.interceptingPlayerId = null;
+    game.currentTurn.selectingDeadline = null;
     // Card is added after bonus phase (to hide album art during bonus)
   } else {
-    // Wrong guess - allow intercepts
+    // Wrong guess - start intercept DECIDING phase (10s to claim)
     game.currentTurn.phase = 'intercepting';
-    game.currentTurn.interceptDeadline = Date.now() + 10000; // 10 second window
+    game.currentTurn.interceptDeadline = Date.now() + 10000; // 10s to decide
+    game.currentTurn.interceptPhase = 'deciding';
+    game.currentTurn.interceptingPlayerId = null;
+    game.currentTurn.selectingDeadline = null;
   }
 
   game.lastActivity = Date.now();
@@ -879,6 +906,10 @@ async function handleNextTurn(roomCode: string, playerId: string) {
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
+      // Two-phase intercept fields
+      interceptPhase: null,
+      interceptingPlayerId: null,
+      selectingDeadline: null,
     };
   } else {
     // No more songs available, end game
@@ -902,7 +933,7 @@ async function handleNextTurn(roomCode: string, playerId: string) {
   return success({ game });
 }
 
-async function handleIntercept(roomCode: string, playerId: string, position: number) {
+async function handleIntercept(roomCode: string, playerId: string, position: number | null) {
   const game = await getGame(roomCode);
   if (!game) return error('Sala no encontrada');
 
@@ -920,37 +951,136 @@ async function handleIntercept(roomCode: string, playerId: string, position: num
     return error('No es momento de interceptar');
   }
 
-  // Check if intercept window has expired
-  if (game.currentTurn.interceptDeadline && Date.now() > game.currentTurn.interceptDeadline) {
-    return error('El tiempo de interceptación ha expirado');
-  }
-
   const player = game.players.find(p => p.id === playerId);
   if (!player) return error('Jugador no encontrado');
 
-  // Must have at least 1 token
-  if (player.tokens < 1) {
-    return error('No tienes tokens para interceptar');
+  const interceptPhase = game.currentTurn.interceptPhase ?? 'deciding';
+
+  // PHASE 1: DECIDING - player clicks "Intercept" button (position is null)
+  if (interceptPhase === 'deciding') {
+    // Check if deciding deadline has expired
+    if (game.currentTurn.interceptDeadline && Date.now() > game.currentTurn.interceptDeadline) {
+      return error('El tiempo de decisión ha expirado');
+    }
+
+    // Check if someone already claimed intercept
+    if (game.currentTurn.interceptingPlayerId) {
+      return error('Alguien ya ha reclamado la interceptación');
+    }
+
+    // Must have at least 1 token
+    if (player.tokens < 1) {
+      return error('No tienes tokens para interceptar');
+    }
+
+    // Deduct token NOW (committed to intercept, no refunds!)
+    player.tokens--;
+
+    // Transition to SELECTING phase
+    game.currentTurn.interceptPhase = 'selecting';
+    game.currentTurn.interceptingPlayerId = playerId;
+    game.currentTurn.selectingDeadline = Date.now() + 10000; // 10s to select position
+    game.currentTurn.interceptDeadline = null; // Clear deciding deadline
+
+    game.lastActivity = Date.now();
+    await setGame(game.roomCode, game);
+    return success({ game });
   }
 
-  // Check if already intercepted
-  if (game.currentTurn.intercepts.some(i => i.playerId === playerId)) {
-    return error('Ya has interceptado este turno');
+  // PHASE 2: SELECTING - interceptor submits their position choice
+  if (interceptPhase === 'selecting') {
+    // Only the intercepting player can submit position
+    if (game.currentTurn.interceptingPlayerId !== playerId) {
+      return error('No eres el interceptor');
+    }
+
+    if (position === null || position === undefined) {
+      return error('Debes seleccionar una posición');
+    }
+
+    // Check selecting deadline
+    if (game.currentTurn.selectingDeadline && Date.now() > game.currentTurn.selectingDeadline) {
+      return error('El tiempo de selección ha expirado');
+    }
+
+    // Record the intercept
+    game.currentTurn.intercepts.push({
+      playerId,
+      position,
+      timestamp: Date.now(),
+    });
+
+    // Now resolve the intercept immediately
+    const currentPlayer = game.players.find(p => p.id === game.currentTurn!.playerId);
+    if (!currentPlayer) return error('Jugador actual no encontrado');
+
+    const song = game.currentTurn.song;
+    const interceptCorrect = checkGuessCorrect(currentPlayer.timeline, song, position);
+
+    game.usedSongs.push(song.id);
+
+    if (interceptCorrect) {
+      // Interceptor wins! Add card to interceptor's timeline
+      const newCard: HipsterTimelineCard = {
+        song,
+        position,
+        placedAt: Date.now(),
+      };
+      player.timeline.splice(position, 0, newCard);
+      player.timeline.forEach((card, idx) => { card.position = idx; });
+
+      game.currentTurn.interceptWinner = playerId;
+      game.currentTurn.phase = 'result';
+      game.currentTurn.interceptPhase = null;
+
+      // Check if interceptor won the game
+      if (player.timeline.length >= game.cardsToWin) {
+        game.winner = player.id;
+        game.phase = 'finished';
+      }
+    } else {
+      // Interceptor got it wrong too - card discarded
+      game.currentTurn.phase = 'result';
+      game.currentTurn.interceptPhase = null;
+      game.currentTurn.interceptWinner = null;
+    }
+
+    game.lastActivity = Date.now();
+    await setGame(game.roomCode, game);
+    return success({ game });
   }
 
-  // Deduct token immediately (no refunds!)
-  player.tokens--;
+  return error('Estado de interceptación inválido');
+}
 
-  // Add intercept to the list
-  game.currentTurn.intercepts.push({
-    playerId,
-    position,
-    timestamp: Date.now(),
-  });
+// Handle intercept timeout (interceptor didn't select in time)
+async function handleInterceptTimeout(roomCode: string, playerId: string) {
+  const game = await getGame(roomCode);
+  if (!game) return error('Sala no encontrada');
+
+  if (!game.currentTurn || game.currentTurn.phase !== 'intercepting') {
+    return error('No hay interceptación activa');
+  }
+
+  // Only allow timeout if in selecting phase
+  if (game.currentTurn.interceptPhase !== 'selecting') {
+    return error('No hay interceptación en fase de selección');
+  }
+
+  // Verify timeout has actually occurred
+  if (game.currentTurn.selectingDeadline && Date.now() < game.currentTurn.selectingDeadline) {
+    return error('El tiempo de selección no ha expirado aún');
+  }
+
+  // Interceptor loses token (already deducted) but no position submitted
+  // Move directly to result phase - card is discarded
+  game.currentTurn.phase = 'result';
+  game.currentTurn.interceptPhase = null;
+  game.currentTurn.interceptWinner = null;
+  game.usedSongs.push(game.currentTurn.song.id);
 
   game.lastActivity = Date.now();
   await setGame(game.roomCode, game);
-
   return success({ game });
 }
 
@@ -1095,6 +1225,10 @@ async function handleSkipTurn(roomCode: string, playerId: string) {
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
+      // Two-phase intercept fields
+      interceptPhase: null,
+      interceptingPlayerId: null,
+      selectingDeadline: null,
     };
   } else {
     // No more songs, end game

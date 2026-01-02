@@ -22,22 +22,22 @@ export function SongCard({
 }: SongCardProps) {
   const sizes = {
     small: {
-      container: 'w-16 h-16',
-      text: 'text-[8px]',
-      year: 'text-xs',
-      hole: 'w-2 h-2',
+      container: 'w-10 h-10',
+      text: 'text-[6px]',
+      year: 'text-[8px]',
+      hole: 'w-1 h-1',
     },
     medium: {
+      container: 'w-12 h-12',
+      text: 'text-[7px]',
+      year: 'text-[10px]',
+      hole: 'w-1.5 h-1.5',
+    },
+    large: {
       container: 'w-20 h-20',
       text: 'text-[10px]',
       year: 'text-sm',
-      hole: 'w-2.5 h-2.5',
-    },
-    large: {
-      container: 'w-28 h-28',
-      text: 'text-xs',
-      year: 'text-base',
-      hole: 'w-3 h-3',
+      hole: 'w-2 h-2',
     },
   };
 
@@ -115,13 +115,13 @@ export function PlacementSlot({ isActive, onClick, label }: PlacementSlotProps) 
       onClick={onClick}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
-      className={`w-20 h-20 rounded-full border-2 border-dashed flex flex-col items-center justify-center transition-all ${
+      className={`w-16 h-16 rounded-full border-2 border-dashed flex flex-col items-center justify-center transition-all ${
         isActive
           ? 'border-green-400 bg-green-500/20 text-green-300'
           : 'border-purple-400/50 bg-purple-500/10 text-purple-300/70 hover:border-purple-400 hover:bg-purple-500/20'
       }`}
     >
-      <span className="text-2xl">?</span>
+      <span className="text-2xl">+</span>
       {label && <span className="text-[8px] mt-1">{label}</span>}
     </motion.button>
   );

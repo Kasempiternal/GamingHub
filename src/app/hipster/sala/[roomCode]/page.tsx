@@ -282,34 +282,29 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => onSelectPosition?.(0)}
-          className={`flex-shrink-0 w-16 h-24 rounded-lg border-2 border-dashed flex items-center justify-center ${
+          className={`flex-shrink-0 w-14 h-14 rounded-lg border-2 border-dashed flex items-center justify-center ${
             selectedPosition === 0 ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
           }`}
         >
-          <span className="text-purple-400/50 text-2xl">←</span>
+          <span className="text-purple-400/50 text-2xl">+</span>
         </motion.button>
       )}
 
       {yearGroups.map((group, groupIndex) => {
         // Position after this group (for inserting between groups)
         const positionAfterGroup = group.startIndex + group.cards.length;
-        // Position to add to this year group (same year placement)
-        const positionInGroup = group.startIndex + group.cards.length;
 
         return (
           <div key={group.year} className="flex items-center gap-2 flex-shrink-0">
-            {/* Year group - stacked if multiple cards */}
+            {/* Year group - stacked if multiple cards (display only, not clickable) */}
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className={`flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-2 text-center ${
-                isInteractive ? 'cursor-pointer hover:bg-purple-500/30 transition-colors' : ''
-              } ${selectedPosition === positionInGroup ? 'ring-2 ring-purple-400 bg-purple-400/20' : ''}`}
-              onClick={() => isInteractive && onSelectPosition?.(positionInGroup)}
-              style={{ minWidth: group.cards.length > 1 ? '5.5rem' : '5rem' }}
+              className="flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-1.5 text-center"
+              style={{ minWidth: group.cards.length > 1 ? '3.5rem' : '3rem' }}
             >
               {/* Stacked album arts for same-year songs */}
-              <div className={`relative ${group.cards.length > 1 ? 'h-20' : ''}`}>
+              <div className={`relative ${group.cards.length > 1 ? 'h-12' : ''}`}>
                 {group.cards.map((card, cardIndex) => (
                   <img
                     key={card.song.id}
@@ -317,14 +312,14 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
                     alt=""
                     className={`rounded-md ${
                       group.cards.length > 1
-                        ? 'absolute w-14 h-14 border-2 border-slate-900'
-                        : 'w-full aspect-square'
+                        ? 'absolute w-10 h-10 border border-slate-900'
+                        : 'w-10 h-10'
                     }`}
                     style={
                       group.cards.length > 1
                         ? {
-                            left: `${cardIndex * 12}px`,
-                            top: `${cardIndex * 8}px`,
+                            left: `${cardIndex * 8}px`,
+                            top: `${cardIndex * 6}px`,
                             zIndex: cardIndex,
                           }
                         : undefined
@@ -332,7 +327,7 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
                   />
                 ))}
               </div>
-              <p className="text-white text-xs font-bold mt-1">
+              <p className="text-white text-[10px] font-bold mt-1">
                 {group.year}
                 {group.cards.length > 1 && (
                   <span className="text-purple-400/60 ml-1">×{group.cards.length}</span>
@@ -346,11 +341,11 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => onSelectPosition?.(positionAfterGroup)}
-                className={`flex-shrink-0 w-16 h-24 rounded-lg border-2 border-dashed flex items-center justify-center ${
+                className={`flex-shrink-0 w-14 h-14 rounded-lg border-2 border-dashed flex items-center justify-center ${
                   selectedPosition === positionAfterGroup ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
                 }`}
               >
-                <span className="text-purple-400/50 text-2xl">→</span>
+                <span className="text-purple-400/50 text-2xl">+</span>
               </motion.button>
             )}
           </div>
@@ -382,6 +377,7 @@ export default function HipsterRoom() {
     submitBonus,
     skipBonus,
     intercept,
+    interceptTimeout,
     resolveIntercept,
     nextTurn,
     resetGame,
@@ -397,31 +393,49 @@ export default function HipsterRoom() {
     }
   }, [game?.currentTurn?.phase]);
 
-  // Intercept countdown timer
+  // Intercept countdown timer - handles both deciding and selecting phases
   useEffect(() => {
-    if (game?.currentTurn?.phase !== 'intercepting' || !game?.currentTurn?.interceptDeadline) {
+    if (game?.currentTurn?.phase !== 'intercepting') {
       setInterceptCountdown(0);
       setShowInterceptUI(false);
       setInterceptPosition(null);
       return;
     }
 
+    const interceptPhase = game?.currentTurn?.interceptPhase ?? 'deciding';
     const isCurrentPlayersTurn = game?.currentTurn?.playerId === playerId;
+    const isInterceptor = game?.currentTurn?.interceptingPlayerId === playerId;
 
     const updateCountdown = () => {
-      const remaining = Math.max(0, Math.ceil((game.currentTurn!.interceptDeadline! - Date.now()) / 1000));
+      // Use the appropriate deadline based on phase
+      const deadline = interceptPhase === 'selecting'
+        ? game.currentTurn!.selectingDeadline
+        : game.currentTurn!.interceptDeadline;
+
+      if (!deadline) {
+        setInterceptCountdown(0);
+        return;
+      }
+
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setInterceptCountdown(remaining);
 
-      // Auto-resolve when countdown reaches 0
-      if (remaining === 0 && isCurrentPlayersTurn) {
-        resolveIntercept();
+      // Auto-handle when countdown reaches 0
+      if (remaining === 0) {
+        if (interceptPhase === 'selecting' && isInterceptor) {
+          // Interceptor failed to select in time - they lose token
+          interceptTimeout();
+        } else if (interceptPhase === 'deciding' && isCurrentPlayersTurn) {
+          // No one intercepted - resolve normally
+          resolveIntercept();
+        }
       }
     };
 
     updateCountdown();
     const interval = setInterval(updateCountdown, 100);
     return () => clearInterval(interval);
-  }, [game?.currentTurn?.phase, game?.currentTurn?.interceptDeadline, game?.currentTurn?.playerId, playerId, resolveIntercept]);
+  }, [game?.currentTurn?.phase, game?.currentTurn?.interceptDeadline, game?.currentTurn?.selectingDeadline, game?.currentTurn?.interceptPhase, game?.currentTurn?.interceptingPlayerId, game?.currentTurn?.playerId, playerId, resolveIntercept, interceptTimeout]);
 
   // Guess countdown timer (60 seconds)
   useEffect(() => {
@@ -697,6 +711,45 @@ export default function HipsterRoom() {
             )}
           </div>
 
+          {/* Spectator Mode: Show minimized own timeline when watching others */}
+          {!isMyTurn && currentPlayer && (
+            <div className="bg-slate-900/40 backdrop-blur rounded-xl p-3 border border-purple-500/10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-purple-400/60 text-xs">
+                  Tu linea temporal ({currentPlayer.timeline.length}/{game.cardsToWin})
+                </span>
+                <span className="text-yellow-400 text-xs">🪙 {currentPlayer.tokens}</span>
+              </div>
+              {currentPlayer.timeline.length > 0 ? (
+                <div className="flex gap-1 overflow-x-auto pb-1">
+                  {currentPlayer.timeline.map((card, idx) => (
+                    <div
+                      key={card.song.id}
+                      className="flex-shrink-0 relative w-8 h-8 rounded-full bg-gradient-to-br from-zinc-800 to-black overflow-hidden"
+                      title={`${card.song.title} - ${card.song.releaseYear}`}
+                    >
+                      {card.song.albumArt ? (
+                        <div
+                          className="absolute inset-[15%] rounded-full bg-cover bg-center"
+                          style={{ backgroundImage: `url(${card.song.albumArt})` }}
+                        />
+                      ) : (
+                        <div className="absolute inset-[15%] rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                          <span className="text-[8px]">🎵</span>
+                        </div>
+                      )}
+                      <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 px-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full">
+                        <span className="text-white font-bold text-[6px]">{card.song.releaseYear}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-purple-400/40 text-xs text-center">Sin cartas todavia</p>
+              )}
+            </div>
+          )}
+
           {/* Phase Progress Indicator */}
           <div className="flex justify-between text-xs px-2">
             <span className={game.currentTurn.phase === 'listening' ? 'text-purple-300 font-bold' : 'text-purple-400/40'}>🎧 Escuchar</span>
@@ -808,117 +861,139 @@ export default function HipsterRoom() {
             </motion.button>
           )}
 
-          {/* Intercept Phase UI */}
-          {game.currentTurn.phase === 'intercepting' && (
-            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-yellow-500/30 space-y-4">
-              {/* Countdown */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-yellow-400 text-lg">⏱️</span>
-                  <span className="text-white font-medium">Fase de Interceptacion</span>
-                </div>
-                <motion.div
-                  className="text-2xl font-bold text-yellow-400"
-                  animate={{ scale: interceptCountdown <= 3 ? [1, 1.2, 1] : 1 }}
-                  transition={{ duration: 0.5, repeat: interceptCountdown <= 3 ? Infinity : 0 }}
-                >
-                  {interceptCountdown}s
-                </motion.div>
-              </div>
+          {/* Intercept Phase UI - Two phases: deciding (10s) then selecting (10s) */}
+          {game.currentTurn.phase === 'intercepting' && (() => {
+            const interceptPhase = game.currentTurn.interceptPhase ?? 'deciding';
+            const interceptingPlayer = game.players.find(p => p.id === game.currentTurn?.interceptingPlayerId);
+            const isInterceptor = game.currentTurn.interceptingPlayerId === playerId;
 
-              {/* Turn player's selected position indicator */}
-              {isMyTurn ? (
-                <div className="text-center text-purple-300">
-                  <p>Has colocado la cancion en la posicion {(game.currentTurn.guessedPosition ?? 0) + 1}</p>
-                  <p className="text-purple-400/50 text-sm">Esperando posibles interceptaciones...</p>
+            return (
+              <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-yellow-500/30 space-y-4">
+                {/* Header with phase indicator and countdown */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-yellow-400 text-lg">⏱️</span>
+                    <span className="text-white font-medium">
+                      {interceptPhase === 'selecting'
+                        ? 'Seleccionando posicion...'
+                        : 'Fase de Interceptacion'}
+                    </span>
+                  </div>
+                  <motion.div
+                    className="text-2xl font-bold text-yellow-400"
+                    animate={{ scale: interceptCountdown <= 3 ? [1, 1.2, 1] : 1 }}
+                    transition={{ duration: 0.5, repeat: interceptCountdown <= 3 ? Infinity : 0 }}
+                  >
+                    {interceptCountdown}s
+                  </motion.div>
                 </div>
-              ) : (
-                <>
-                  {/* Show turn player's timeline for interceptors */}
-                  {turnPlayer && (
-                    <div className="space-y-2">
-                      <p className="text-purple-300 text-sm">
-                        Linea temporal de {turnPlayer.name} ({turnPlayer.timeline.length} cartas)
-                      </p>
-                      <Timeline
-                        timeline={turnPlayer.timeline}
-                        onSelectPosition={showInterceptUI ? setInterceptPosition : undefined}
-                        selectedPosition={interceptPosition}
-                        isInteractive={showInterceptUI}
-                      />
-                    </div>
-                  )}
 
-                  {/* Intercept Button or Placement UI */}
-                  {!showInterceptUI ? (
-                    <div className="flex flex-col items-center gap-2">
-                      {currentPlayer && currentPlayer.tokens > 0 && !game.currentTurn.intercepts.some(i => i.playerId === playerId) ? (
+                {/* Turn player's view - just waiting */}
+                {isMyTurn ? (
+                  <div className="text-center text-purple-300">
+                    <p>Has colocado la cancion en la posicion {(game.currentTurn.guessedPosition ?? 0) + 1}</p>
+                    <p className="text-purple-400/50 text-sm">
+                      {interceptPhase === 'selecting'
+                        ? `${interceptingPlayer?.name} esta seleccionando su posicion...`
+                        : 'Esperando posibles interceptaciones...'}
+                    </p>
+                  </div>
+                ) : interceptPhase === 'selecting' ? (
+                  // SELECTING PHASE - Only interceptor can select position
+                  isInterceptor ? (
+                    <>
+                      {/* Interceptor sees timeline to select position */}
+                      {turnPlayer && (
+                        <div className="space-y-2">
+                          <p className="text-yellow-300 text-sm text-center font-medium">
+                            Has interceptado! Selecciona donde va la cancion
+                          </p>
+                          <Timeline
+                            timeline={turnPlayer.timeline}
+                            onSelectPosition={setInterceptPosition}
+                            selectedPosition={interceptPosition}
+                            isInteractive={true}
+                          />
+                        </div>
+                      )}
+
+                      {/* Confirm button when position selected */}
+                      {interceptPosition !== null && (
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => setShowInterceptUI(true)}
+                          onClick={() => {
+                            intercept(interceptPosition);
+                            setInterceptPosition(null);
+                          }}
+                          className="w-full py-3 bg-yellow-500 text-black font-bold rounded-xl"
+                        >
+                          Confirmar Posicion {interceptPosition + 1}
+                        </motion.button>
+                      )}
+                    </>
+                  ) : (
+                    // Other players see waiting message
+                    <div className="text-center py-4">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                        className="w-8 h-8 mx-auto mb-3 border-2 border-yellow-400 border-t-transparent rounded-full"
+                      />
+                      <p className="text-yellow-400 font-medium">
+                        {interceptingPlayer?.avatar} {interceptingPlayer?.name} esta seleccionando...
+                      </p>
+                      <p className="text-purple-400/50 text-sm mt-1">
+                        Tiene {interceptCountdown}s para elegir la posicion
+                      </p>
+                    </div>
+                  )
+                ) : (
+                  // DECIDING PHASE - Players can claim intercept
+                  <>
+                    {/* Show turn player's timeline */}
+                    {turnPlayer && (
+                      <div className="space-y-2">
+                        <p className="text-purple-300 text-sm">
+                          Linea temporal de {turnPlayer.name} ({turnPlayer.timeline.length} cartas)
+                        </p>
+                        <Timeline
+                          timeline={turnPlayer.timeline}
+                          isInteractive={false}
+                        />
+                      </div>
+                    )}
+
+                    {/* Intercept button - first to click wins */}
+                    <div className="flex flex-col items-center gap-2">
+                      {currentPlayer && currentPlayer.tokens > 0 ? (
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => intercept(null)} // null = claiming phase 1
                           className="px-6 py-3 bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 rounded-xl font-medium flex items-center gap-2"
                         >
                           <span>🎯</span>
                           Interceptar (1 token)
                         </motion.button>
-                      ) : game.currentTurn.intercepts.some(i => i.playerId === playerId) ? (
-                        <p className="text-green-400 text-sm">✓ Ya has interceptado</p>
                       ) : (
                         <p className="text-purple-400/50 text-sm">No tienes tokens para interceptar</p>
                       )}
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-yellow-300 text-sm text-center">
-                        Selecciona donde crees que va la cancion
-                      </p>
-                      {interceptPosition !== null && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setShowInterceptUI(false);
-                              setInterceptPosition(null);
-                            }}
-                            className="flex-1 py-2 bg-purple-500/20 text-purple-300 rounded-lg"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={() => {
-                              intercept(interceptPosition);
-                              setShowInterceptUI(false);
-                              setInterceptPosition(null);
-                            }}
-                            className="flex-1 py-2 bg-yellow-500 text-black font-medium rounded-lg"
-                          >
-                            Confirmar Intercepcion
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
+                  </>
+                )}
 
-              {/* List of who has intercepted */}
-              {game.currentTurn.intercepts.length > 0 && (
-                <div className="pt-2 border-t border-purple-500/20">
-                  <p className="text-purple-400/50 text-xs mb-1">Interceptaciones:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {game.currentTurn.intercepts.map(int => {
-                      const intPlayer = game.players.find(p => p.id === int.playerId);
-                      return (
-                        <span key={int.playerId} className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">
-                          {intPlayer?.avatar} {intPlayer?.name}
-                        </span>
-                      );
-                    })}
+                {/* Show who intercepted (during selecting phase) */}
+                {interceptPhase === 'selecting' && interceptingPlayer && (
+                  <div className="pt-2 border-t border-purple-500/20">
+                    <p className="text-purple-400/50 text-xs">
+                      🎯 {interceptingPlayer.avatar} {interceptingPlayer.name} ha interceptado
+                    </p>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
 
           {/* Bonus Phase */}
           {isMyTurn && game.currentTurn.phase === 'bonus' && (
@@ -954,7 +1029,8 @@ export default function HipsterRoom() {
                     setBonusArtist('');
                     setBonusTitle('');
                   }}
-                  className="flex-1 py-2 bg-purple-500 text-white rounded-lg"
+                  disabled={!bonusArtist.trim() && !bonusTitle.trim()}
+                  className="flex-1 py-2 bg-purple-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Adivinar
                 </button>

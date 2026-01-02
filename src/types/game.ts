@@ -375,6 +375,9 @@ export interface HipsterBonusGuess {
   title: string;
 }
 
+// Two-phase intercept sub-phases
+export type HipsterInterceptPhase = 'deciding' | 'selecting';
+
 export interface HipsterCurrentTurn {
   playerId: string;
   song: HipsterSong;
@@ -387,8 +390,12 @@ export interface HipsterCurrentTurn {
   guessDeadline: number | null;        // Unix timestamp when player must guess by (60s timer)
   // Intercept phase fields
   intercepts: HipsterIntercept[];      // List of intercepts from other players
-  interceptDeadline: number | null;    // Unix timestamp when intercept phase ends
+  interceptDeadline: number | null;    // Unix timestamp when intercept DECIDING phase ends
   interceptWinner: string | null;      // Player ID who won via intercept (null if original wins)
+  // Two-phase intercept fields
+  interceptPhase: HipsterInterceptPhase | null;  // 'deciding' (10s to claim) or 'selecting' (10s to pick position)
+  interceptingPlayerId: string | null;            // Who claimed the intercept
+  selectingDeadline: number | null;               // Unix timestamp when SELECTING phase ends
 }
 
 export interface HipsterGameState {
