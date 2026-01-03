@@ -297,14 +297,11 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
 
         return (
           <div key={group.year} className="flex items-center gap-2 flex-shrink-0">
-            {/* Year group - clickable for same-year selection */}
+            {/* Year group - display only (use + slots to select positions) */}
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              onClick={() => isInteractive && onSelectPosition?.(positionAfterGroup)}
-              className={`flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-1.5 text-center ${
-                isInteractive ? 'cursor-pointer hover:bg-purple-500/30 hover:border-purple-400/50 transition-colors' : ''
-              }`}
+              className="flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-1.5 text-center"
               style={{ minWidth: group.cards.length > 1 ? '3.5rem' : '3rem' }}
             >
               {/* Stacked album arts for same-year songs */}
