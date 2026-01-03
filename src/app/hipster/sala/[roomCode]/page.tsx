@@ -823,6 +823,19 @@ export default function HipsterRoom() {
             )}
           </div>
 
+          {/* Non-turn player: Show turn player's timeline for strategic viewing during listening/guessing */}
+          {!isMyTurn && turnPlayer && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing') && (
+            <div className="bg-slate-900/40 backdrop-blur rounded-xl p-3 border border-purple-500/10">
+              <p className="text-purple-400/60 text-xs mb-2">
+                Linea temporal de {turnPlayer.name} ({turnPlayer.timeline.length} cartas)
+              </p>
+              <Timeline
+                timeline={turnPlayer.timeline}
+                isInteractive={false}
+              />
+            </div>
+          )}
+
           {/* Spectator Mode: Show minimized own timeline when watching others */}
           {!isMyTurn && currentPlayer && (
             <div className="bg-slate-900/40 backdrop-blur rounded-xl p-3 border border-purple-500/10">
