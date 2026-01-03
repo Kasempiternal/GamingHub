@@ -19,9 +19,17 @@ export interface UseAsesinatoResult {
   canAccuse: boolean;
   discussionTimeRemaining: number;
 
+  // Night phase derived state
+  isHolding: boolean;
+  allPlayersHolding: boolean;
+  forensicScientistName: string | null;
+
   // Actions
   startGame: () => Promise<void>;
   proceedToMurderSelection: () => Promise<void>;
+  startHold: () => Promise<{ allHolding: boolean }>;
+  stopHold: () => Promise<void>;
+  startSleeping: () => Promise<void>;
   selectSolution: (clueCardId: string, meansCardId: string) => Promise<void>;
   selectTileOption: (tileId: string, optionIndex: number) => Promise<void>;
   confirmClues: () => Promise<void>;
@@ -52,6 +60,12 @@ export function useAsesinato(roomCode: string, playerId: string | null): UseAses
     player?.role !== 'murderer' &&
     player?.role !== 'accomplice' &&
     game?.phase === 'discussion';
+
+  // Night phase derived state
+  const isHolding = playerId ? (game?.playersHolding?.includes(playerId) ?? false) : false;
+  const allPlayersHolding = (game?.playersHolding?.length ?? 0) === (game?.players?.length ?? 0) && (game?.players?.length ?? 0) > 0;
+  const forensicScientist = game?.players?.find(p => p.role === 'forensicScientist');
+  const forensicScientistName = forensicScientist?.name ?? null;
 
   // Update discussion timer
   useEffect(() => {
@@ -154,6 +168,19 @@ export function useAsesinato(roomCode: string, playerId: string | null): UseAses
     await apiAction('proceedToMurderSelection');
   };
 
+  const startHold = async () => {
+    const result = await apiAction('startHold');
+    return { allHolding: result.data?.allHolding || false };
+  };
+
+  const stopHold = async () => {
+    await apiAction('stopHold');
+  };
+
+  const startSleeping = async () => {
+    await apiAction('startSleeping');
+  };
+
   const selectSolution = async (clueCardId: string, meansCardId: string) => {
     await apiAction('selectSolution', { clueCardId, meansCardId });
   };
@@ -196,8 +223,14 @@ export function useAsesinato(roomCode: string, playerId: string | null): UseAses
     isInvestigator,
     canAccuse,
     discussionTimeRemaining,
+    isHolding,
+    allPlayersHolding,
+    forensicScientistName,
     startGame,
     proceedToMurderSelection,
+    startHold,
+    stopHold,
+    startSleeping,
     selectSolution,
     selectTileOption,
     confirmClues,

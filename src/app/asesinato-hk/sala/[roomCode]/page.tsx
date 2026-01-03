@@ -6,9 +6,9 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAsesinato } from '@/hooks/useAsesinato';
 import { getRoleName, getRoleDescription } from '@/lib/asesinatoLogic';
-import { playRevealSound, playSelectSound, playVictorySound, playErrorSound, playClickSound, playWarningSound, playNotificationSound } from '@/lib/audioUtils';
+import { playRevealSound, playSelectSound, playVictorySound, playErrorSound, playClickSound, playWarningSound, playNotificationSound, playCountdownSound, startSleepingAmbience, stopSleepingAmbience, playWakeUpSound, triggerWakeVibration } from '@/lib/audioUtils';
 import type { AsesinatoPlayer, AsesinatoSceneTile, AsesinatoClueCard, AsesinatoMeansCard } from '@/types/game';
-import { AsesinatoHelper, AsesinatoHelperToggle } from '@/components/asesinato-hk';
+import { AsesinatoHelper, AsesinatoHelperToggle, HoldButton } from '@/components/asesinato-hk';
 
 export default function AsesinatoRoomPage() {
   const params = useParams();
@@ -37,8 +37,14 @@ export default function AsesinatoRoomPage() {
     isInvestigator,
     canAccuse,
     discussionTimeRemaining,
+    isHolding,
+    allPlayersHolding,
+    forensicScientistName,
     startGame,
     proceedToMurderSelection,
+    startHold,
+    stopHold,
+    startSleeping,
     selectSolution,
     selectTileOption,
     confirmClues,
@@ -69,6 +75,11 @@ export default function AsesinatoRoomPage() {
     return stored === null ? true : stored === 'true';
   });
   const [helperDismissed, setHelperDismissed] = useState(false);
+
+  // Night phase audio state
+  const [sleepingAmbienceStop, setSleepingAmbienceStop] = useState<(() => void) | null>(null);
+  const [countdownPlayed, setCountdownPlayed] = useState(false);
+  const [wakeUpHandled, setWakeUpHandled] = useState(false);
 
   // Play sounds on phase changes
   useEffect(() => {
@@ -103,6 +114,55 @@ export default function AsesinatoRoomPage() {
   useEffect(() => {
     setHelperDismissed(false);
   }, [game?.phase]);
+
+  // Handle night phase audio and transitions
+  useEffect(() => {
+    // Handle countdown when all players are holding
+    if (game?.nightPhase === 'countdown' && !countdownPlayed) {
+      setCountdownPlayed(true);
+      playCountdownSound().then(() => {
+        // After countdown, trigger server to start sleeping phase
+        startSleeping();
+      });
+    }
+
+    // Handle sleeping ambience
+    if (game?.nightPhase === 'sleeping' && !sleepingAmbienceStop) {
+      const stopFn = startSleepingAmbience();
+      setSleepingAmbienceStop(() => stopFn);
+    }
+
+    // Handle wake up
+    if (game?.nightPhase === 'waking' && !wakeUpHandled) {
+      setWakeUpHandled(true);
+      // Stop sleeping ambience
+      if (sleepingAmbienceStop) {
+        sleepingAmbienceStop();
+        setSleepingAmbienceStop(null);
+      }
+      stopSleepingAmbience();
+      playWakeUpSound();
+      triggerWakeVibration();
+    }
+
+    // Reset states when phase changes away from murderSelection
+    if (game?.phase !== 'murderSelection') {
+      if (sleepingAmbienceStop) {
+        sleepingAmbienceStop();
+        setSleepingAmbienceStop(null);
+      }
+      stopSleepingAmbience();
+      setCountdownPlayed(false);
+      setWakeUpHandled(false);
+    }
+  }, [game?.nightPhase, game?.phase, countdownPlayed, sleepingAmbienceStop, wakeUpHandled, startSleeping]);
+
+  // Cleanup sleeping ambience on unmount
+  useEffect(() => {
+    return () => {
+      stopSleepingAmbience();
+    };
+  }, []);
 
   // Toggle helper enabled state
   const toggleHelper = () => {
@@ -179,6 +239,17 @@ export default function AsesinatoRoomPage() {
   const handleProceedToMurderSelection = async () => {
     playClickSound();
     await proceedToMurderSelection();
+  };
+
+  // Handle hold button start
+  const handleHoldStart = async () => {
+    const result = await startHold();
+    // If all players holding, countdown will start automatically via server
+  };
+
+  // Handle hold button end
+  const handleHoldEnd = async () => {
+    await stopHold();
   };
 
   // Handle confirm clues with sound
@@ -352,74 +423,204 @@ export default function AsesinatoRoomPage() {
         );
 
       case 'murderSelection':
+        // Night phase implementation
+        const nightPhase = game.nightPhase || 'waiting';
+        const playersHoldingCount = game.playersHolding?.length || 0;
+        const totalPlayers = game.players.length;
+
         return (
           <div className="space-y-6">
-            {isMurderer ? (
+            {/* Forensic Scientist identity - ALWAYS visible */}
+            <div className="bg-cyan-900/30 border border-cyan-700/50 rounded-xl p-4 text-center">
+              <p className="text-cyan-400 text-sm mb-1">Cientifico Forense</p>
+              <p className="text-white text-xl font-bold flex items-center justify-center gap-2">
+                <span className="text-2xl">
+                  {game.players.find(p => p.role === 'forensicScientist')?.avatar}
+                </span>
+                {forensicScientistName}
+              </p>
+            </div>
+
+            {/* Night Phase UI */}
+            {nightPhase === 'waiting' && (
               <>
                 <div className="text-center">
-                  <h2 className="text-2xl font-bold text-red-400 mb-2">Elige tu Crimen</h2>
-                  <p className="text-slate-400">Selecciona UNA evidencia y UN metodo de tus cartas</p>
+                  <h2 className="text-2xl font-bold text-white mb-2">Noche de Crimen</h2>
+                  <p className="text-slate-400">
+                    Cierra los ojos y mantén presionado el botón
+                  </p>
                 </div>
 
-                {/* My Clue Cards */}
-                <div>
-                  <h3 className="text-white font-semibold mb-2">Tus Evidencias (elige 1)</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {player?.clueCards.map(card => (
-                      <button
-                        key={card.id}
-                        onClick={() => handleCardSelect('clue', card.id)}
-                        className={`p-3 rounded-lg text-left transition-all ${
-                          selectedClueCard === card.id
-                            ? 'bg-red-800 border-2 border-red-500'
-                            : 'bg-slate-800 border border-slate-700 hover:border-slate-600'
-                        }`}
-                      >
-                        <p className="text-white font-medium">{card.name}</p>
-                        <p className="text-slate-400 text-xs">{card.category}</p>
-                      </button>
-                    ))}
+                <HoldButton
+                  onHoldStart={handleHoldStart}
+                  onHoldEnd={handleHoldEnd}
+                  isHolding={isHolding}
+                  disabled={false}
+                />
+
+                {/* Players holding status */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <p className="text-slate-400 text-sm mb-2">
+                    Jugadores listos: {playersHoldingCount}/{totalPlayers}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {game.players.map(p => {
+                      const isPlayerHolding = game.playersHolding?.includes(p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm ${
+                            isPlayerHolding
+                              ? 'bg-green-800/50 text-green-300'
+                              : 'bg-slate-700/50 text-slate-400'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${isPlayerHolding ? 'bg-green-400' : 'bg-slate-500'}`} />
+                          <span>{p.name}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-
-                {/* My Means Cards */}
-                <div>
-                  <h3 className="text-white font-semibold mb-2">Tus Metodos (elige 1)</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {player?.meansCards.map(card => (
-                      <button
-                        key={card.id}
-                        onClick={() => handleCardSelect('means', card.id)}
-                        className={`p-3 rounded-lg text-left transition-all ${
-                          selectedMeansCard === card.id
-                            ? 'bg-red-800 border-2 border-red-500'
-                            : 'bg-slate-800 border border-slate-700 hover:border-slate-600'
-                        }`}
-                      >
-                        <p className="text-white font-medium">{card.name}</p>
-                        <p className="text-slate-400 text-xs">{card.category}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleSelectSolution}
-                  disabled={!selectedClueCard || !selectedMeansCard}
-                  className="w-full py-4 bg-gradient-to-r from-red-800 to-red-900 hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all"
-                >
-                  Confirmar Crimen
-                </button>
               </>
-            ) : (
+            )}
+
+            {nightPhase === 'countdown' && (
               <div className="text-center py-12">
-                <div className="text-6xl mb-4">🌙</div>
-                <h2 className="text-2xl font-bold text-white mb-2">Noche de Crimen</h2>
-                <p className="text-slate-400">
-                  {isForensicScientist
-                    ? 'El asesino esta eligiendo su crimen... Pronto conoceras la verdad.'
-                    : 'El asesino esta eligiendo su crimen... Cierra los ojos.'}
-                </p>
+                <motion.div
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="text-8xl font-bold text-red-500 mb-4"
+                >
+                  🌙
+                </motion.div>
+                <h2 className="text-3xl font-bold text-white mb-2">Cerrando ojos...</h2>
+                <p className="text-slate-400">3... 2... 1...</p>
+
+                <HoldButton
+                  onHoldStart={() => {}}
+                  onHoldEnd={() => {}}
+                  isHolding={true}
+                  disabled={true}
+                  label="MANTENER CERRADOS"
+                />
+              </div>
+            )}
+
+            {nightPhase === 'sleeping' && (
+              <>
+                {isMurderer && !game.murdererReady ? (
+                  // Murderer sees card selection
+                  <>
+                    <div className="text-center">
+                      <h2 className="text-2xl font-bold text-red-400 mb-2">🔪 Elige tu Crimen</h2>
+                      <p className="text-slate-400">Selecciona UNA evidencia y UN metodo</p>
+                    </div>
+
+                    {/* Clue Cards - 2x2 grid */}
+                    <div>
+                      <h3 className="text-white font-semibold mb-2">Evidencias (elige 1)</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {player?.clueCards.map(card => (
+                          <motion.button
+                            key={card.id}
+                            onClick={() => handleCardSelect('clue', card.id)}
+                            whileTap={{ scale: 0.95 }}
+                            className={`p-4 rounded-xl text-left transition-all ${
+                              selectedClueCard === card.id
+                                ? 'bg-red-800 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                                : 'bg-slate-800/80 border-2 border-slate-700 hover:border-slate-600'
+                            }`}
+                          >
+                            <p className="text-white font-bold text-lg mb-1">{card.name}</p>
+                            <p className="text-slate-400 text-xs">{card.category}</p>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Means Cards - 2x2 grid */}
+                    <div>
+                      <h3 className="text-white font-semibold mb-2">Metodos (elige 1)</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {player?.meansCards.map(card => (
+                          <motion.button
+                            key={card.id}
+                            onClick={() => handleCardSelect('means', card.id)}
+                            whileTap={{ scale: 0.95 }}
+                            className={`p-4 rounded-xl text-left transition-all ${
+                              selectedMeansCard === card.id
+                                ? 'bg-red-800 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                                : 'bg-slate-800/80 border-2 border-slate-700 hover:border-slate-600'
+                            }`}
+                          >
+                            <p className="text-white font-bold text-lg mb-1">{card.name}</p>
+                            <p className="text-slate-400 text-xs">{card.category}</p>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleSelectSolution}
+                      disabled={!selectedClueCard || !selectedMeansCard}
+                      className="w-full py-4 bg-gradient-to-r from-red-800 to-red-900 hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-lg rounded-xl transition-all"
+                    >
+                      Confirmar Crimen 🔪
+                    </button>
+                  </>
+                ) : isMurderer && game.murdererReady ? (
+                  // Murderer sees fake hold button after selection
+                  <div className="text-center py-6">
+                    <h2 className="text-2xl font-bold text-white mb-4">Crimen Elegido</h2>
+                    <p className="text-slate-400 mb-6">Mantén los ojos cerrados como los demas...</p>
+
+                    <HoldButton
+                      onHoldStart={() => {}}
+                      onHoldEnd={() => {}}
+                      isHolding={true}
+                      disabled={false}
+                      isFake={true}
+                      label="ESPERANDO..."
+                    />
+                  </div>
+                ) : (
+                  // Non-murderers keep eyes closed
+                  <div className="text-center py-6">
+                    <motion.div
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 3, repeat: Infinity }}
+                      className="text-8xl mb-6"
+                    >
+                      😴
+                    </motion.div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Mantén los ojos cerrados</h2>
+                    <p className="text-slate-400 mb-6">El crimen se esta cometiendo...</p>
+
+                    <HoldButton
+                      onHoldStart={() => {}}
+                      onHoldEnd={() => {}}
+                      isHolding={true}
+                      disabled={true}
+                      label="OJOS CERRADOS"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {nightPhase === 'waking' && (
+              <div className="text-center py-12">
+                <motion.div
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1.2, opacity: 1 }}
+                  transition={{ type: 'spring', duration: 0.5 }}
+                  className="text-8xl mb-6"
+                >
+                  ☀️
+                </motion.div>
+                <h2 className="text-3xl font-bold text-amber-400 mb-2">Despierta!</h2>
+                <p className="text-slate-300">Abre los ojos... la investigacion comienza</p>
               </div>
             )}
           </div>

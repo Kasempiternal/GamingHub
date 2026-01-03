@@ -5,7 +5,11 @@ import {
   addPlayer,
   startGame,
   proceedToMurderSelection,
+  startHolding,
+  stopHolding,
+  startSleepingPhase,
   selectMurderSolution,
+  checkAndWakeUp,
   selectSceneTileOption,
   confirmClues,
   replaceSceneTile,
@@ -174,12 +178,20 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        const game = await asesinatoStore.get(roomCode.toUpperCase());
+        let game = await asesinatoStore.get(roomCode.toUpperCase());
         if (!game) {
           return NextResponse.json(
             { success: false, error: 'Partida no encontrada' },
             { status: 404 }
           );
+        }
+
+        // Check if it's time to wake up from night phase
+        const updatedGame = checkAndWakeUp(game);
+        if (updatedGame.phase !== game.phase || updatedGame.nightPhase !== game.nightPhase) {
+          // Game state changed, save it
+          await asesinatoStore.set(roomCode.toUpperCase(), updatedGame);
+          game = updatedGame;
         }
 
         return NextResponse.json({
@@ -259,6 +271,115 @@ export async function POST(request: NextRequest) {
         }
 
         const { game: updatedGame, error } = proceedToMurderSelection(game);
+        if (error) {
+          return NextResponse.json(
+            { success: false, error },
+            { status: 400 }
+          );
+        }
+
+        await asesinatoStore.set(roomCode.toUpperCase(), updatedGame);
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            game: sanitizeGameForPlayer(updatedGame, playerId),
+          },
+        });
+      }
+
+      // Night phase: player starts holding button
+      case 'startHold': {
+        const { roomCode, playerId } = body;
+        if (!roomCode || !playerId) {
+          return NextResponse.json(
+            { success: false, error: 'Faltan datos' },
+            { status: 400 }
+          );
+        }
+
+        const game = await asesinatoStore.get(roomCode.toUpperCase());
+        if (!game) {
+          return NextResponse.json(
+            { success: false, error: 'Partida no encontrada' },
+            { status: 404 }
+          );
+        }
+
+        const { game: updatedGame, allHolding, error } = startHolding(game, playerId);
+        if (error) {
+          return NextResponse.json(
+            { success: false, error },
+            { status: 400 }
+          );
+        }
+
+        await asesinatoStore.set(roomCode.toUpperCase(), updatedGame);
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            game: sanitizeGameForPlayer(updatedGame, playerId),
+            allHolding,
+          },
+        });
+      }
+
+      // Night phase: player stops holding button
+      case 'stopHold': {
+        const { roomCode, playerId } = body;
+        if (!roomCode || !playerId) {
+          return NextResponse.json(
+            { success: false, error: 'Faltan datos' },
+            { status: 400 }
+          );
+        }
+
+        const game = await asesinatoStore.get(roomCode.toUpperCase());
+        if (!game) {
+          return NextResponse.json(
+            { success: false, error: 'Partida no encontrada' },
+            { status: 404 }
+          );
+        }
+
+        const { game: updatedGame, error } = stopHolding(game, playerId);
+        if (error) {
+          return NextResponse.json(
+            { success: false, error },
+            { status: 400 }
+          );
+        }
+
+        await asesinatoStore.set(roomCode.toUpperCase(), updatedGame);
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            game: sanitizeGameForPlayer(updatedGame, playerId),
+          },
+        });
+      }
+
+      // Night phase: transition from countdown to sleeping
+      case 'startSleeping': {
+        const { roomCode, playerId } = body;
+        if (!roomCode || !playerId) {
+          return NextResponse.json(
+            { success: false, error: 'Faltan datos' },
+            { status: 400 }
+          );
+        }
+
+        const game = await asesinatoStore.get(roomCode.toUpperCase());
+        if (!game) {
+          return NextResponse.json(
+            { success: false, error: 'Partida no encontrada' },
+            { status: 404 }
+          );
+        }
+
+        const { game: updatedGame, error } = startSleepingPhase(game);
         if (error) {
           return NextResponse.json(
             { success: false, error },

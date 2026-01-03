@@ -640,6 +640,7 @@ export const WAVELENGTH_CONFIG = {
 
 export type AsesinatoRole = 'forensicScientist' | 'murderer' | 'accomplice' | 'witness' | 'investigator';
 export type AsesinatoPhase = 'lobby' | 'roleReveal' | 'murderSelection' | 'clueGiving' | 'discussion' | 'finished';
+export type AsesinatoNightPhase = 'waiting' | 'countdown' | 'sleeping' | 'waking' | null;
 
 export interface AsesinatoClueCard {
   id: string;
@@ -728,6 +729,12 @@ export interface AsesinatoGameState {
 
   // Clue giving state
   forensicReady: boolean;                          // FS has finished placing clues this round
+
+  // Night phase (murder selection ritual)
+  nightPhase: 'waiting' | 'countdown' | 'sleeping' | 'waking' | null;
+  playersHolding: string[];                        // Player IDs currently holding button
+  murdererReady: boolean;                          // Murderer has submitted their selection
+  wakeUpAt: number | null;                         // Timestamp when wake-up should trigger
 
   // Game result
   winner: 'investigators' | 'murderer' | null;

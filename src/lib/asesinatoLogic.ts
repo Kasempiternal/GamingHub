@@ -78,6 +78,10 @@ export function createGame(hostName: string, deviceId?: string): AsesinatoGameSt
     discussionDeadline: null,
     discussionDuration: 180000, // 3 minutes
     forensicReady: false,
+    nightPhase: null,
+    playersHolding: [],
+    murdererReady: false,
+    wakeUpAt: null,
     winner: null,
     winReason: null,
     allAccusations: [],
@@ -207,12 +211,100 @@ export function proceedToMurderSelection(game: AsesinatoGameState): { game: Ases
     game: {
       ...game,
       phase: 'murderSelection',
+      nightPhase: 'waiting',
+      playersHolding: [],
+      murdererReady: false,
+      wakeUpAt: null,
+      lastActivity: Date.now(),
+    },
+  };
+}
+
+// ============================================
+// NIGHT PHASE FUNCTIONS
+// ============================================
+
+// Player starts holding their "eyes closed" button
+export function startHolding(
+  game: AsesinatoGameState,
+  playerId: string
+): { game: AsesinatoGameState; allHolding: boolean; error?: string } {
+  if (game.phase !== 'murderSelection') {
+    return { game, allHolding: false, error: 'No es el momento' };
+  }
+
+  const player = game.players.find(p => p.id === playerId);
+  if (!player) {
+    return { game, allHolding: false, error: 'Jugador no encontrado' };
+  }
+
+  // Add player to holding list if not already there
+  const playersHolding = game.playersHolding.includes(playerId)
+    ? game.playersHolding
+    : [...game.playersHolding, playerId];
+
+  // Check if all players are now holding
+  const allHolding = playersHolding.length === game.players.length;
+
+  // If all holding and still in waiting phase, move to countdown
+  let nightPhase = game.nightPhase;
+  if (allHolding && nightPhase === 'waiting') {
+    nightPhase = 'countdown';
+  }
+
+  return {
+    game: {
+      ...game,
+      playersHolding,
+      nightPhase,
+      lastActivity: Date.now(),
+    },
+    allHolding,
+  };
+}
+
+// Player stops holding (releases button)
+export function stopHolding(
+  game: AsesinatoGameState,
+  playerId: string
+): { game: AsesinatoGameState; error?: string } {
+  if (game.phase !== 'murderSelection') {
+    return { game, error: 'No es el momento' };
+  }
+
+  // Only track holding releases during waiting phase
+  // During sleeping phase, the murderer's release is handled separately
+  if (game.nightPhase === 'waiting') {
+    const playersHolding = game.playersHolding.filter(id => id !== playerId);
+    return {
+      game: {
+        ...game,
+        playersHolding,
+        lastActivity: Date.now(),
+      },
+    };
+  }
+
+  return { game };
+}
+
+// Transition from countdown to sleeping (called after 3-2-1 completes)
+export function startSleepingPhase(game: AsesinatoGameState): { game: AsesinatoGameState; error?: string } {
+  if (game.phase !== 'murderSelection' || game.nightPhase !== 'countdown') {
+    return { game, error: 'No es el momento' };
+  }
+
+  return {
+    game: {
+      ...game,
+      nightPhase: 'sleeping',
       lastActivity: Date.now(),
     },
   };
 }
 
 // Murderer selects the solution (1 clue card + 1 means card from their own cards)
+// This now sets the solution and starts the 5-second wake timer instead of immediately transitioning
 export function selectMurderSolution(
   game: AsesinatoGameState,
   murdererId: string,
@@ -221,6 +313,10 @@ export function selectMurderSolution(
 ): { game: AsesinatoGameState; error?: string } {
   if (game.phase !== 'murderSelection') {
     return { game, error: 'No es el momento de seleccionar el crimen' };
+  }
+
+  if (game.nightPhase !== 'sleeping') {
+    return { game, error: 'Debes esperar a que todos cierren los ojos' };
   }
 
   const murderer = game.players.find(p => p.id === murdererId);
@@ -240,7 +336,37 @@ export function selectMurderSolution(
     return { game, error: 'Debes seleccionar cartas de tu propia mano' };
   }
 
-  // Set up scene tiles for round 1
+  // Store solution and set wake timer (5 seconds from now)
+  return {
+    game: {
+      ...game,
+      solution: {
+        murdererPlayerId: murdererId,
+        keyEvidenceId: clueCardId,
+        meansOfMurderId: meansCardId,
+      },
+      murdererReady: true,
+      wakeUpAt: Date.now() + 5000, // 5 seconds
+      nightPhase: 'waking',
+      lastActivity: Date.now(),
+    },
+  };
+}
+
+// Check if wake time has passed and transition to clueGiving
+// Called during polling/GET requests
+export function checkAndWakeUp(game: AsesinatoGameState): AsesinatoGameState {
+  // Only check during waking phase
+  if (game.phase !== 'murderSelection' || game.nightPhase !== 'waking') {
+    return game;
+  }
+
+  // Check if wake time has passed
+  if (!game.wakeUpAt || Date.now() < game.wakeUpAt) {
+    return game;
+  }
+
+  // Time to wake up! Set up scene tiles and transition to clueGiving
   const usedTileIds: string[] = [];
   const sceneTiles = getRandomSceneTiles(4, usedTileIds);
   const causeOfDeathTile = getCauseOfDeathTile();
@@ -251,30 +377,26 @@ export function selectMurderSolution(
   const availableSceneTiles = game.availableSceneTiles.filter(t => !usedIds.includes(t.id));
 
   return {
-    game: {
-      ...game,
-      phase: 'clueGiving',
-      solution: {
-        murdererPlayerId: murdererId,
-        keyEvidenceId: clueCardId,
-        meansOfMurderId: meansCardId,
-      },
-      sceneTiles,
-      causeOfDeathTile,
-      locationTile,
-      availableSceneTiles,
-      currentRound: 1,
-      forensicReady: false,
-      rounds: [{
-        roundNumber: 1,
-        sceneTilesRevealed: sceneTiles.map(t => t.id),
-        replacedTileId: null,
-        accusations: [],
-        startedAt: Date.now(),
-        endedAt: null,
-      }],
-      lastActivity: Date.now(),
-    },
+    ...game,
+    phase: 'clueGiving',
+    nightPhase: null,
+    playersHolding: [],
+    wakeUpAt: null,
+    sceneTiles,
+    causeOfDeathTile,
+    locationTile,
+    availableSceneTiles,
+    currentRound: 1,
+    forensicReady: false,
+    rounds: [{
+      roundNumber: 1,
+      sceneTilesRevealed: sceneTiles.map(t => t.id),
+      replacedTileId: null,
+      accusations: [],
+      startedAt: Date.now(),
+      endedAt: null,
+    }],
+    lastActivity: Date.now(),
   };
 }
 
@@ -643,6 +765,10 @@ export function resetGame(game: AsesinatoGameState): AsesinatoGameState {
     rounds: [],
     discussionDeadline: null,
     forensicReady: false,
+    nightPhase: null,
+    playersHolding: [],
+    murdererReady: false,
+    wakeUpAt: null,
     winner: null,
     winReason: null,
     allAccusations: [],

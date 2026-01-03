@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface RadialDialProps {
@@ -10,7 +10,7 @@ interface RadialDialProps {
   showTarget: boolean;         // Whether to show the target zone
   currentGuess?: number;       // Current guess position (0-100)
   onGuessChange?: (position: number) => void;
-  interactive?: boolean;       // Whether user can drag the dial
+  interactive?: boolean;       // Whether user can use the slider
   revealMode?: boolean;        // Reveal animation mode
   size?: number;               // Diameter in pixels
 }
@@ -26,99 +26,18 @@ export function RadialDial({
   revealMode = false,
   size = 300,
 }: RadialDialProps) {
-  const [isDragging, setIsDragging] = useState(false);
   const [localGuess, setLocalGuess] = useState(currentGuess);
-  const dialRef = useRef<SVGSVGElement>(null);
 
   // Update local guess when prop changes
   useEffect(() => {
-    if (!isDragging) {
-      setLocalGuess(currentGuess);
-    }
-  }, [currentGuess, isDragging]);
+    setLocalGuess(currentGuess);
+  }, [currentGuess]);
 
   // Convert position (0-100) to angle (0 = left, 100 = right)
   // The dial goes from -90° (left) to 90° (right)
   const positionToAngle = (position: number) => {
     return -90 + (position / 100) * 180;
   };
-
-  // Convert angle to position
-  const angleToPosition = (angle: number) => {
-    // Clamp angle to -90 to 90
-    const clampedAngle = Math.max(-90, Math.min(90, angle));
-    return ((clampedAngle + 90) / 180) * 100;
-  };
-
-  // Handle touch/mouse interaction
-  const handleInteraction = useCallback((clientX: number, clientY: number) => {
-    if (!interactive || !dialRef.current) return;
-
-    const rect = dialRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    // Calculate angle from center
-    const dx = clientX - centerX;
-    const dy = centerY - clientY; // Inverted because Y grows downward
-
-    // Get angle in degrees (-180 to 180)
-    let angle = Math.atan2(dx, dy) * (180 / Math.PI);
-
-    // Convert to position
-    const position = angleToPosition(angle);
-    setLocalGuess(position);
-    onGuessChange?.(Math.round(position));
-  }, [interactive, onGuessChange]);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!interactive) return;
-    setIsDragging(true);
-    handleInteraction(e.clientX, e.clientY);
-  };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    handleInteraction(e.clientX, e.clientY);
-  }, [isDragging, handleInteraction]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (!interactive) return;
-    e.preventDefault(); // Prevent page scrolling
-    setIsDragging(true);
-    const touch = e.touches[0];
-    handleInteraction(touch.clientX, touch.clientY);
-  };
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging) return;
-    e.preventDefault(); // Prevent page scrolling
-    const touch = e.touches[0];
-    handleInteraction(touch.clientX, touch.clientY);
-  }, [isDragging, handleInteraction]);
-
-  // Add global event listeners for dragging
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleTouchMove, { passive: false });
-      window.addEventListener('touchend', handleMouseUp);
-      window.addEventListener('touchcancel', handleMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleMouseUp);
-      window.removeEventListener('touchcancel', handleMouseUp);
-    };
-  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove]);
 
   const radius = size / 2 - 20;
   const center = size / 2;
@@ -149,6 +68,13 @@ export function RadialDial({
     return `M ${x1} ${y1} A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x4} ${y4} Z`;
   };
 
+  // Handle slider change
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.target.value);
+    setLocalGuess(value);
+    onGuessChange?.(value);
+  };
+
   return (
     <div className="flex flex-col items-center">
       {/* Spectrum Labels */}
@@ -157,16 +83,12 @@ export function RadialDial({
         <span className="text-sm font-medium text-cyan-400 truncate max-w-[45%] text-right">{rightConcept}</span>
       </div>
 
-      {/* Dial */}
+      {/* Dial (visual only) */}
       <svg
-        ref={dialRef}
         width={size}
         height={size / 2 + 40}
         viewBox={`0 0 ${size} ${size / 2 + 40}`}
-        className={`select-none ${interactive ? 'cursor-pointer' : ''}`}
-        style={{ touchAction: interactive ? 'none' : 'auto' }}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
+        className="select-none"
       >
         {/* Background arc */}
         <path
@@ -256,7 +178,7 @@ export function RadialDial({
           );
         })}
 
-        {/* Guess indicator - calculate position mathematically for reliability */}
+        {/* Guess indicator - animated dial hand */}
         {(() => {
           const angleRad = (guessAngle - 90) * (Math.PI / 180);
           const handLength = radius - 10;
@@ -319,6 +241,40 @@ export function RadialDial({
         <span className="text-2xl font-bold text-white">{Math.round(localGuess)}</span>
         <span className="text-sm text-white/60 ml-1">/ 100</span>
       </div>
+
+      {/* Slider control (only when interactive) */}
+      {interactive && (
+        <div className="w-full mt-4 px-2" style={{ maxWidth: size }}>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={localGuess}
+            onChange={handleSliderChange}
+            className="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer
+              [&::-webkit-slider-thumb]:appearance-none
+              [&::-webkit-slider-thumb]:w-8
+              [&::-webkit-slider-thumb]:h-8
+              [&::-webkit-slider-thumb]:rounded-full
+              [&::-webkit-slider-thumb]:bg-cyan-400
+              [&::-webkit-slider-thumb]:cursor-pointer
+              [&::-webkit-slider-thumb]:shadow-lg
+              [&::-webkit-slider-thumb]:border-4
+              [&::-webkit-slider-thumb]:border-white
+              [&::-moz-range-thumb]:w-8
+              [&::-moz-range-thumb]:h-8
+              [&::-moz-range-thumb]:rounded-full
+              [&::-moz-range-thumb]:bg-cyan-400
+              [&::-moz-range-thumb]:cursor-pointer
+              [&::-moz-range-thumb]:border-4
+              [&::-moz-range-thumb]:border-white"
+          />
+          <div className="flex justify-between text-xs text-white/50 mt-1 px-1">
+            <span>{leftConcept}</span>
+            <span>{rightConcept}</span>
+          </div>
+        </div>
+      )}
 
       {/* Scoring legend (during reveal) */}
       {showTarget && revealMode && (
