@@ -565,6 +565,15 @@ export default function HipsterRoom() {
     }
   }, [roomCode, router]);
 
+  // Auto-play audio for host when turn player starts listening (phase becomes 'guessing')
+  const currentPlayerForAudio = game?.players.find(p => p.id === playerId);
+  const isHostForAudio = currentPlayerForAudio?.isHost ?? false;
+  useEffect(() => {
+    if (isHostForAudio && game?.currentTurn?.phase === 'guessing' && !isAudioPlaying) {
+      setIsAudioPlaying(true);
+    }
+  }, [isHostForAudio, game?.currentTurn?.phase, isAudioPlaying]);
+
   if (!game) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -588,13 +597,6 @@ export default function HipsterRoom() {
   const currentPlayer = game.players.find(p => p.id === playerId);
   const isHost = currentPlayer?.isHost ?? false;
   const isMyTurn = game.currentTurn?.playerId === playerId;
-
-  // Auto-play audio for host when turn player starts listening (phase becomes 'guessing')
-  useEffect(() => {
-    if (isHost && game?.currentTurn?.phase === 'guessing' && !isAudioPlaying) {
-      setIsAudioPlaying(true);
-    }
-  }, [isHost, game?.currentTurn?.phase, isAudioPlaying]);
 
   // LOBBY PHASE
   if (game.phase === 'lobby') {
