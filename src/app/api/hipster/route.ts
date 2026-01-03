@@ -292,7 +292,7 @@ function findChronologicalPosition(timeline: HipsterTimelineCard[], year: number
   return sortedTimeline.length; // Insert at end
 }
 
-// Fuzzy match for bonus guess (case insensitive, allows minor typos)
+// Fuzzy match for bonus guess (case insensitive, 80% accuracy required)
 function fuzzyMatch(guess: string, actual: string): boolean {
   const normalizeStr = (s: string) =>
     s.toLowerCase()
@@ -307,13 +307,19 @@ function fuzzyMatch(guess: string, actual: string): boolean {
   const g = normalizeStr(guess);
   const a = normalizeStr(actual);
 
+  // Empty guess is never correct
+  if (g.length === 0) return false;
+
+  // Exact match
   if (g === a) return true;
 
-  // Allow if guess contains the main part
-  if (a.includes(g) || g.includes(a)) return true;
+  // Word match: if guess matches any word in actual exactly
+  // e.g., "payaso" matches "So Payaso"
+  const actualWords = a.split(' ');
+  if (actualWords.some(word => word === g)) return true;
 
-  // Simple Levenshtein distance for typo tolerance
-  const maxDistance = Math.floor(a.length * 0.3); // Allow 30% error
+  // Levenshtein distance for typo tolerance (80% accuracy = 20% max error)
+  const maxDistance = Math.floor(a.length * 0.2);
   const distance = levenshteinDistance(g, a);
   return distance <= maxDistance;
 }

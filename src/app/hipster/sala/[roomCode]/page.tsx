@@ -437,7 +437,7 @@ export default function HipsterRoom() {
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [guessCountdown, setGuessCountdown] = useState<number>(0);
 
-  // Stop audio when turn phase changes
+  // Stop audio when turn phase changes (except when moving to guessing)
   useEffect(() => {
     if (game?.currentTurn?.phase !== 'listening' && game?.currentTurn?.phase !== 'guessing' && game?.currentTurn?.phase !== 'intercepting') {
       setIsAudioPlaying(false);
@@ -588,6 +588,13 @@ export default function HipsterRoom() {
   const currentPlayer = game.players.find(p => p.id === playerId);
   const isHost = currentPlayer?.isHost ?? false;
   const isMyTurn = game.currentTurn?.playerId === playerId;
+
+  // Auto-play audio for host when turn player starts listening (phase becomes 'guessing')
+  useEffect(() => {
+    if (isHost && game?.currentTurn?.phase === 'guessing' && !isAudioPlaying) {
+      setIsAudioPlaying(true);
+    }
+  }, [isHost, game?.currentTurn?.phase, isAudioPlaying]);
 
   // LOBBY PHASE
   if (game.phase === 'lobby') {
