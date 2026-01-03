@@ -762,10 +762,10 @@ export const ASESINATO_CONFIG = {
   } as Record<number, { forensicScientist: number; murderer: number; accomplice: number; witness: number; investigator: number }>
 };
 
-// Avatars (detective/mystery themed)
+// Avatars (detective/mystery themed) - using reliably-rendered emojis
 export const ASESINATO_AVATARS = [
-  '🕵️', '🔍', '🔎', '🔬', '🧪', '💉', '🔪', '🗡️',
-  '💀', '🦴', '🩸', '🧬', '📋', '🔦', '🕯️', '⚰️'
+  '🔍', '🔎', '🔬', '🧪', '💉', '🔪', '💀', '🦴',
+  '🩸', '🧬', '📋', '🔦', '🎭', '🖤', '👁', '🌙'
 ];
 
 export default {};

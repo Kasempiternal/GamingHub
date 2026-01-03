@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAsesinato } from '@/hooks/useAsesinato';
 import { getRoleName, getRoleDescription } from '@/lib/asesinatoLogic';
+import { playRevealSound, playSelectSound, playVictorySound, playErrorSound, playClickSound, playWarningSound, playNotificationSound } from '@/lib/audioUtils';
 import type { AsesinatoPlayer, AsesinatoSceneTile, AsesinatoClueCard, AsesinatoMeansCard } from '@/types/game';
 
 export default function AsesinatoRoomPage() {
@@ -58,6 +59,36 @@ export default function AsesinatoRoomPage() {
   const [showReplaceTileModal, setShowReplaceTileModal] = useState(false);
   const [tileToReplace, setTileToReplace] = useState<string | null>(null);
   const [lastAccusationResult, setLastAccusationResult] = useState<{ isCorrect: boolean; accuserName: string } | null>(null);
+  const [prevPhase, setPrevPhase] = useState<string | null>(null);
+
+  // Play sounds on phase changes
+  useEffect(() => {
+    if (game?.phase && game.phase !== prevPhase) {
+      if (game.phase === 'roleReveal' && prevPhase === 'lobby') {
+        playRevealSound();
+      } else if (game.phase === 'discussion' && prevPhase === 'clueGiving') {
+        playSelectSound();
+      } else if (game.phase === 'finished') {
+        // Play victory or defeat based on winner
+        if (game.winner === 'investigators') {
+          playVictorySound();
+        } else {
+          playErrorSound();
+        }
+      }
+      setPrevPhase(game.phase);
+    }
+  }, [game?.phase, game?.winner, prevPhase]);
+
+  // Play warning sound when discussion timer is low (under 30 seconds)
+  useEffect(() => {
+    if (game?.phase === 'discussion' && discussionTimeRemaining > 0 && discussionTimeRemaining <= 30000) {
+      const seconds = Math.floor(discussionTimeRemaining / 1000);
+      if (seconds === 30 || seconds === 10 || seconds === 5) {
+        playWarningSound();
+      }
+    }
+  }, [game?.phase, discussionTimeRemaining]);
 
   // Loading state
   if (loading) {
@@ -93,9 +124,50 @@ export default function AsesinatoRoomPage() {
   // Handle murder solution selection
   const handleSelectSolution = async () => {
     if (!selectedClueCard || !selectedMeansCard) return;
+    playSelectSound();
     await selectSolution(selectedClueCard, selectedMeansCard);
     setSelectedClueCard(null);
     setSelectedMeansCard(null);
+  };
+
+  // Handle card selection with sound
+  const handleCardSelect = (type: 'clue' | 'means', cardId: string) => {
+    playClickSound();
+    if (type === 'clue') {
+      setSelectedClueCard(cardId);
+    } else {
+      setSelectedMeansCard(cardId);
+    }
+  };
+
+  // Handle tile option selection with sound
+  const handleTileOptionSelect = async (tileId: string, optionIndex: number) => {
+    playClickSound();
+    await selectTileOption(tileId, optionIndex);
+  };
+
+  // Handle start game with sound
+  const handleStartGame = async () => {
+    playClickSound();
+    await startGame();
+  };
+
+  // Handle proceed to murder selection with sound
+  const handleProceedToMurderSelection = async () => {
+    playClickSound();
+    await proceedToMurderSelection();
+  };
+
+  // Handle confirm clues with sound
+  const handleConfirmClues = async () => {
+    playNotificationSound();
+    await confirmClues();
+  };
+
+  // Handle open accusation modal with sound
+  const handleOpenAccusation = () => {
+    playClickSound();
+    setShowAccusationModal(true);
   };
 
   // Handle accusation
@@ -103,6 +175,12 @@ export default function AsesinatoRoomPage() {
     if (!accusationTarget || !accusationClue || !accusationMeans) return;
     const result = await accuse(accusationTarget.id, accusationClue.id, accusationMeans.id);
     setLastAccusationResult({ isCorrect: result.isCorrect, accuserName: player?.name || '' });
+    // Play sound based on result
+    if (result.isCorrect) {
+      playVictorySound();
+    } else {
+      playErrorSound();
+    }
     setShowAccusationModal(false);
     resetAccusationState();
   };
@@ -170,7 +248,7 @@ export default function AsesinatoRoomPage() {
             {/* Start button */}
             {isHost && (
               <button
-                onClick={startGame}
+                onClick={handleStartGame}
                 disabled={game.players.length < 4}
                 className="w-full py-4 bg-gradient-to-r from-red-800 to-red-900 hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all"
               >
@@ -241,7 +319,7 @@ export default function AsesinatoRoomPage() {
 
             {isHost && (
               <button
-                onClick={proceedToMurderSelection}
+                onClick={handleProceedToMurderSelection}
                 className="w-full py-4 bg-gradient-to-r from-red-800 to-red-900 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-xl transition-all"
               >
                 Continuar - Seleccion del Crimen
@@ -267,7 +345,7 @@ export default function AsesinatoRoomPage() {
                     {player?.clueCards.map(card => (
                       <button
                         key={card.id}
-                        onClick={() => setSelectedClueCard(card.id)}
+                        onClick={() => handleCardSelect('clue', card.id)}
                         className={`p-3 rounded-lg text-left transition-all ${
                           selectedClueCard === card.id
                             ? 'bg-red-800 border-2 border-red-500'
@@ -288,7 +366,7 @@ export default function AsesinatoRoomPage() {
                     {player?.meansCards.map(card => (
                       <button
                         key={card.id}
-                        onClick={() => setSelectedMeansCard(card.id)}
+                        onClick={() => handleCardSelect('means', card.id)}
                         className={`p-3 rounded-lg text-left transition-all ${
                           selectedMeansCard === card.id
                             ? 'bg-red-800 border-2 border-red-500'
@@ -367,14 +445,14 @@ export default function AsesinatoRoomPage() {
                   <SceneTileComponent
                     tile={game.causeOfDeathTile}
                     isForensicScientist={isForensicScientist}
-                    onSelect={(optionIndex) => selectTileOption(game.causeOfDeathTile!.id, optionIndex)}
+                    onSelect={(optionIndex) => handleTileOptionSelect(game.causeOfDeathTile!.id, optionIndex)}
                   />
                 )}
                 {game.locationTile && (
                   <SceneTileComponent
                     tile={game.locationTile}
                     isForensicScientist={isForensicScientist}
-                    onSelect={(optionIndex) => selectTileOption(game.locationTile!.id, optionIndex)}
+                    onSelect={(optionIndex) => handleTileOptionSelect(game.locationTile!.id, optionIndex)}
                   />
                 )}
               </div>
@@ -386,7 +464,7 @@ export default function AsesinatoRoomPage() {
                     key={tile.id}
                     tile={tile}
                     isForensicScientist={isForensicScientist}
-                    onSelect={(optionIndex) => selectTileOption(tile.id, optionIndex)}
+                    onSelect={(optionIndex) => handleTileOptionSelect(tile.id, optionIndex)}
                     canReplace={isForensicScientist && game.currentRound > 1 && !game.rounds[game.rounds.length - 1]?.replacedTileId}
                     onReplace={() => {
                       setTileToReplace(tile.id);
@@ -400,7 +478,7 @@ export default function AsesinatoRoomPage() {
             {/* Confirm button for Forensic Scientist */}
             {isForensicScientist && (
               <button
-                onClick={confirmClues}
+                onClick={handleConfirmClues}
                 className="w-full py-4 bg-gradient-to-r from-cyan-700 to-cyan-800 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold rounded-xl transition-all"
               >
                 Confirmar Pistas - Iniciar Discusion
@@ -499,7 +577,7 @@ export default function AsesinatoRoomPage() {
             {/* Accusation Button */}
             {canAccuse && (
               <button
-                onClick={() => setShowAccusationModal(true)}
+                onClick={handleOpenAccusation}
                 className="w-full py-4 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-semibold rounded-xl transition-all"
               >
                 Hacer Acusacion (Solo tienes 1!)
@@ -697,7 +775,7 @@ export default function AsesinatoRoomPage() {
                   {game?.players.filter(p => p.id !== playerId).map(p => (
                     <button
                       key={p.id}
-                      onClick={() => { setAccusationTarget(p); setAccusationStep('clue'); }}
+                      onClick={() => { playClickSound(); setAccusationTarget(p); setAccusationStep('clue'); }}
                       className="w-full p-3 bg-slate-800 hover:bg-slate-700 rounded-xl flex items-center gap-3 transition-colors"
                     >
                       <span className="text-2xl">{p.avatar}</span>
@@ -713,7 +791,7 @@ export default function AsesinatoRoomPage() {
                   {accusationTarget.clueCards.map(c => (
                     <button
                       key={c.id}
-                      onClick={() => { setAccusationClue(c); setAccusationStep('means'); }}
+                      onClick={() => { playClickSound(); setAccusationClue(c); setAccusationStep('means'); }}
                       className="w-full p-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-left transition-colors"
                     >
                       <p className="text-white font-medium">{c.name}</p>
@@ -729,7 +807,7 @@ export default function AsesinatoRoomPage() {
                   {accusationTarget.meansCards.map(c => (
                     <button
                       key={c.id}
-                      onClick={() => { setAccusationMeans(c); setAccusationStep('confirm'); }}
+                      onClick={() => { playClickSound(); setAccusationMeans(c); setAccusationStep('confirm'); }}
                       className="w-full p-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-left transition-colors"
                     >
                       <p className="text-white font-medium">{c.name}</p>

@@ -33,11 +33,11 @@ export function generateRoomCode(): string {
   return code;
 }
 
-// Get random avatar from the mystery-themed set
+// Get random avatar from the mystery-themed set (using reliably-rendered emojis)
 export function getRandomAvatar(usedAvatars: string[]): string {
   const avatars = [
-    '🕵️', '🔍', '🔎', '🔬', '🧪', '💉', '🔪', '🗡️',
-    '💀', '🦴', '🩸', '🧬', '📋', '🔦', '🕯️', '⚰️'
+    '🔍', '🔎', '🔬', '🧪', '💉', '🔪', '💀', '🦴',
+    '🩸', '🧬', '📋', '🔦', '🎭', '🖤', '👁', '🌙'
   ];
   const available = avatars.filter(a => !usedAvatars.includes(a));
   if (available.length === 0) return avatars[Math.floor(Math.random() * avatars.length)];

@@ -129,6 +129,12 @@ function GameCard({ game, index }: { game: Game; index: number }) {
       text: 'text-orange-400',
       glow: 'shadow-orange-500/20',
     },
+    cyan: {
+      bg: 'bg-cyan-500/10',
+      border: 'border-cyan-500/30',
+      text: 'text-cyan-400',
+      glow: 'shadow-cyan-500/20',
+    },
   };
 
   const colors = accentColors[game.accentColor];
@@ -321,7 +327,7 @@ export default function Home() {
             animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="text-white/40 text-xs font-medium">v2.7.6 - Strategy Edition</span>
+          <span className="text-white/40 text-xs font-medium">v2.8.0 - Asesinato Edition</span>
         </motion.div>
       </motion.header>
 
