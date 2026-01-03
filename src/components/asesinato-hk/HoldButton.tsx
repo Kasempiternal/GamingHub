@@ -1,13 +1,13 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { initAudio } from '@/lib/audioUtils';
 
 interface HoldButtonProps {
   onHoldStart: () => void;
   onHoldEnd: () => void;
-  isHolding: boolean;
+  isHolding?: boolean; // Server state (kept for compatibility, not used for visuals)
   disabled?: boolean;
   isFake?: boolean;
   label?: string;
@@ -16,58 +16,101 @@ interface HoldButtonProps {
 export function HoldButton({
   onHoldStart,
   onHoldEnd,
-  isHolding,
   disabled = false,
   isFake = false,
   label = 'MANTENER PRESIONADO',
 }: HoldButtonProps) {
-  const isHoldingRef = useRef(false);
+  // LOCAL state for instant visual feedback (like WordReveal)
+  const [isLocallyHolding, setIsLocallyHolding] = useState(false);
+  const maxHoldTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleStart = useCallback((e?: React.TouchEvent | React.MouseEvent) => {
-    // Prevent default to avoid scroll/zoom on mobile
-    if (e && 'touches' in e) {
-      e.preventDefault();
+  // Auto-release after 30 seconds (safety mechanism)
+  useEffect(() => {
+    if (isLocallyHolding && !isFake) {
+      maxHoldTimeoutRef.current = setTimeout(() => {
+        setIsLocallyHolding(false);
+        onHoldEnd();
+      }, 30000);
     }
+
+    return () => {
+      if (maxHoldTimeoutRef.current) {
+        clearTimeout(maxHoldTimeoutRef.current);
+      }
+    };
+  }, [isLocallyHolding, isFake, onHoldEnd]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (maxHoldTimeoutRef.current) {
+        clearTimeout(maxHoldTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Pointer Events (unified for mouse + touch + pen)
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
     if (disabled) return;
 
     // Initialize audio on first interaction (critical for mobile!)
     initAudio();
 
     if (isFake) {
-      // Fake button does nothing but looks like it's working
+      // Fake button shows visuals but doesn't notify server
+      setIsLocallyHolding(true);
       return;
     }
-    if (!isHoldingRef.current) {
-      isHoldingRef.current = true;
-      onHoldStart();
-    }
-  }, [disabled, isFake, onHoldStart]);
 
-  const handleEnd = useCallback((e?: React.TouchEvent | React.MouseEvent) => {
-    // Prevent default on touch events
-    if (e && 'touches' in e) {
-      e.preventDefault();
+    setIsLocallyHolding(true); // Instant visual feedback
+    onHoldStart();             // Notify server (async, don't wait)
+  };
+
+  const handlePointerUp = () => {
+    if (disabled) return;
+
+    setIsLocallyHolding(false); // Instant visual feedback
+
+    if (maxHoldTimeoutRef.current) {
+      clearTimeout(maxHoldTimeoutRef.current);
     }
-    if (disabled || isFake) return;
-    if (isHoldingRef.current) {
-      isHoldingRef.current = false;
+
+    if (!isFake) {
+      onHoldEnd(); // Notify server
+    }
+  };
+
+  const handlePointerLeave = () => {
+    if (disabled || !isLocallyHolding) return;
+
+    setIsLocallyHolding(false);
+
+    if (maxHoldTimeoutRef.current) {
+      clearTimeout(maxHoldTimeoutRef.current);
+    }
+
+    if (!isFake) {
       onHoldEnd();
     }
-  }, [disabled, isFake, onHoldEnd]);
+  };
 
-  // Cleanup: call onHoldEnd if component unmounts while holding
-  useEffect(() => {
-    return () => {
-      if (isHoldingRef.current && !isFake) {
-        onHoldEnd();
-      }
-    };
-  }, [isFake, onHoldEnd]);
+  const handlePointerCancel = () => {
+    if (disabled) return;
 
-  // Prevent context menu on long press
-  const handleContextMenu = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-  }, []);
+    setIsLocallyHolding(false);
+
+    if (maxHoldTimeoutRef.current) {
+      clearTimeout(maxHoldTimeoutRef.current);
+    }
+
+    if (!isFake) {
+      onHoldEnd();
+    }
+  };
+
+  // Use LOCAL state for all visuals (instant feedback)
+  const showHoldingState = isLocallyHolding || isFake;
 
   return (
     <motion.button
@@ -75,25 +118,23 @@ export function HoldButton({
         w-full aspect-square max-w-xs mx-auto rounded-3xl
         flex flex-col items-center justify-center gap-4
         text-white font-bold text-xl
-        select-none touch-none
+        select-none cursor-pointer
         transition-colors duration-200
         ${disabled
           ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
-          : isHolding || isFake
+          : showHoldingState
             ? 'bg-red-700 border-4 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.5)]'
             : 'bg-slate-800 border-4 border-slate-600 hover:border-slate-500'
         }
       `}
-      onMouseDown={(e) => handleStart(e)}
-      onMouseUp={(e) => handleEnd(e)}
-      onMouseLeave={() => handleEnd()}
-      onTouchStart={(e) => handleStart(e)}
-      onTouchEnd={(e) => handleEnd(e)}
-      onTouchCancel={() => handleEnd()}
-      onContextMenu={handleContextMenu}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerLeave}
+      onPointerCancel={handlePointerCancel}
+      style={{ touchAction: 'none' }}
       disabled={disabled}
       whileTap={disabled ? {} : { scale: 0.98 }}
-      animate={isHolding || isFake ? {
+      animate={showHoldingState ? {
         boxShadow: [
           '0 0 20px rgba(239,68,68,0.3)',
           '0 0 40px rgba(239,68,68,0.5)',
@@ -105,7 +146,7 @@ export function HoldButton({
       {/* Moon icon */}
       <motion.span
         className="text-6xl"
-        animate={isHolding || isFake ? {
+        animate={showHoldingState ? {
           scale: [1, 1.1, 1],
           opacity: [1, 0.8, 1],
         } : {}}
@@ -120,7 +161,7 @@ export function HoldButton({
       </span>
 
       {/* Pulsing ring when holding */}
-      {(isHolding || isFake) && (
+      {showHoldingState && (
         <>
           <motion.div
             className="absolute inset-0 rounded-3xl border-2 border-red-400"
