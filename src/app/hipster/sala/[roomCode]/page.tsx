@@ -243,10 +243,11 @@ function PlayerList({ players, currentPlayerId }: { players: HipsterPlayer[]; cu
 }
 
 // Timeline Component - Groups same-year songs together
-function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive }: {
+function Timeline({ timeline, onSelectPosition, selectedPosition, selectedType, isInteractive }: {
   timeline: { song: HipsterSong }[];
-  onSelectPosition?: (position: number) => void;
+  onSelectPosition?: (position: number, type: 'slot' | 'year') => void;
   selectedPosition?: number | null;
+  selectedType?: 'slot' | 'year' | null;
   isInteractive?: boolean;
 }) {
   const sortedTimeline = [...timeline].sort((a, b) => a.song.releaseYear - b.song.releaseYear);
@@ -282,9 +283,9 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => onSelectPosition?.(0)}
+          onClick={() => onSelectPosition?.(0, 'slot')}
           className={`flex-shrink-0 w-14 h-14 rounded-lg border-2 border-dashed flex items-center justify-center ${
-            selectedPosition === 0 ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
+            selectedPosition === 0 && selectedType === 'slot' ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
           }`}
         >
           <span className="text-purple-400/50 text-2xl">+</span>
@@ -295,13 +296,25 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
         // Position after this group (for inserting between groups)
         const positionAfterGroup = group.startIndex + group.cards.length;
 
+        const isYearSelected = selectedPosition === positionAfterGroup && selectedType === 'year';
+        const isSlotSelected = selectedPosition === positionAfterGroup && selectedType === 'slot';
+
         return (
           <div key={group.year} className="flex items-center gap-2 flex-shrink-0">
-            {/* Year group - display only (use + slots to select positions) */}
+            {/* Year group - clickable for "same year" selection */}
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-1.5 text-center"
+              whileHover={isInteractive ? { scale: 1.05 } : {}}
+              whileTap={isInteractive ? { scale: 0.95 } : {}}
+              onClick={() => isInteractive && onSelectPosition?.(positionAfterGroup, 'year')}
+              className={`flex-shrink-0 rounded-lg p-1.5 text-center transition-colors ${
+                isInteractive ? 'cursor-pointer' : ''
+              } ${
+                isYearSelected
+                  ? 'bg-green-500/30 border-2 border-green-400'
+                  : 'bg-purple-500/20 border border-purple-500/30 hover:bg-purple-500/30'
+              }`}
               style={{ minWidth: group.cards.length > 1 ? '3.5rem' : '3rem' }}
             >
               {/* Stacked album arts for same-year songs */}
@@ -350,14 +363,14 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
               </p>
             </motion.div>
 
-            {/* Insert slot between year groups (not between same-year cards) */}
+            {/* Insert slot between year groups - for "after" selection */}
             {isInteractive && (
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => onSelectPosition?.(positionAfterGroup)}
+                onClick={() => onSelectPosition?.(positionAfterGroup, 'slot')}
                 className={`flex-shrink-0 w-14 h-14 rounded-lg border-2 border-dashed flex items-center justify-center ${
-                  selectedPosition === positionAfterGroup ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
+                  isSlotSelected ? 'border-purple-400 bg-purple-400/20' : 'border-purple-400/30'
                 }`}
               >
                 <span className="text-purple-400/50 text-2xl">+</span>
@@ -477,6 +490,7 @@ export default function HipsterRoom() {
   }, [game?.currentTurn?.phase, game?.currentTurn?.guessDeadline, game?.currentTurn?.playerId, playerId, skipTurn]);
 
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
+  const [selectedType, setSelectedType] = useState<'slot' | 'year' | null>(null);
   const [bonusArtist, setBonusArtist] = useState('');
   const [bonusTitle, setBonusTitle] = useState('');
   const [interceptPosition, setInterceptPosition] = useState<number | null>(null);
@@ -857,8 +871,12 @@ export default function HipsterRoom() {
               <h3 className="text-purple-300 text-sm font-medium mb-2">Tu Linea Temporal ({currentPlayer.timeline.length}/{game.cardsToWin})</h3>
               <Timeline
                 timeline={currentPlayer.timeline}
-                onSelectPosition={isMyTurn && game.currentTurn.phase !== 'result' ? setSelectedPosition : undefined}
+                onSelectPosition={isMyTurn && game.currentTurn.phase !== 'result' ? (pos, type) => {
+                  setSelectedPosition(pos);
+                  setSelectedType(type);
+                } : undefined}
                 selectedPosition={selectedPosition}
+                selectedType={selectedType}
                 isInteractive={isMyTurn && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing')}
               />
             </div>
@@ -873,6 +891,7 @@ export default function HipsterRoom() {
                 setIsAudioPlaying(false);
                 submitGuess(selectedPosition);
                 setSelectedPosition(null);
+                setSelectedType(null);
               }}
               className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl"
             >
@@ -929,8 +948,12 @@ export default function HipsterRoom() {
                           </p>
                           <Timeline
                             timeline={turnPlayer.timeline}
-                            onSelectPosition={setInterceptPosition}
+                            onSelectPosition={(pos, type) => {
+                              setInterceptPosition(pos);
+                              setSelectedType(type);
+                            }}
                             selectedPosition={interceptPosition}
+                            selectedType={selectedType}
                             isInteractive={true}
                           />
                         </div>
@@ -944,6 +967,7 @@ export default function HipsterRoom() {
                           onClick={() => {
                             intercept(interceptPosition);
                             setInterceptPosition(null);
+                            setSelectedType(null);
                           }}
                           className="w-full py-3 bg-yellow-500 text-black font-bold rounded-xl"
                         >
