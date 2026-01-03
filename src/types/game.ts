@@ -454,4 +454,91 @@ export const HIPSTER_AVATARS = [
   '🎵', '🎶', '🎼', '🪗', '🪘', '🎚️', '🎛️', '📻'
 ];
 
+// ============================================
+// TIMES UP GAME TYPES (¡Tiempo!)
+// ============================================
+
+export type TimesUpPhase = 'lobby' | 'round1' | 'round2' | 'round3' | 'roundEnd' | 'finished';
+export type TimesUpTeam = 'orange' | 'blue';
+export type TimesUpCategory = 'celebrity' | 'fiction' | 'sports' | 'historical' | 'music';
+
+export interface TimesUpCard {
+  id: string;
+  name: string;
+  category: TimesUpCategory;
+  guessedInRound?: number;  // Which round was it guessed (1, 2, or 3)
+  guessedBy?: TimesUpTeam;  // Which team guessed it
+}
+
+export interface TimesUpPlayer {
+  id: string;
+  name: string;
+  avatar: string;
+  team: TimesUpTeam | null;
+  isHost: boolean;
+  cardsGuessedThisGame: number;  // Total cards guessed by this player
+}
+
+export interface TimesUpTurn {
+  playerId: string;
+  team: TimesUpTeam;
+  startedAt: number;           // Unix timestamp when turn started
+  endsAt: number;              // Unix timestamp when turn ends (startedAt + 30000)
+  cardsGuessed: number;        // Cards guessed this turn
+  currentCardIndex: number;    // Index in remainingCards array
+  isActive: boolean;           // Is the turn currently active
+}
+
+export interface TimesUpRoundScore {
+  round: number;
+  orangeScore: number;
+  blueScore: number;
+}
+
+export interface TimesUpGameState {
+  roomCode: string;
+  phase: TimesUpPhase;
+  players: TimesUpPlayer[];
+
+  // Card deck
+  allCards: TimesUpCard[];           // All cards for this game (30-40)
+  remainingCards: TimesUpCard[];     // Cards not yet guessed this round
+  guessedCards: TimesUpCard[];       // Cards guessed this round
+
+  // Current turn
+  currentTurn: TimesUpTurn | null;
+  currentTeam: TimesUpTeam;          // Which team's turn
+  turnOrder: string[];               // Player IDs in turn order
+  currentTurnIndex: number;          // Index in turnOrder
+
+  // Scores
+  orangeScore: number;               // Total orange team score
+  blueScore: number;                 // Total blue team score
+  roundScores: TimesUpRoundScore[];  // Score per round
+
+  // Game state
+  currentRound: number;              // 1, 2, or 3
+  winner: TimesUpTeam | null;
+
+  // Timestamps
+  createdAt: number;
+  lastActivity: number;
+}
+
+// Times Up game configuration
+export const TIMESUP_CONFIG = {
+  turnDuration: 30000,        // 30 seconds per turn
+  cardsPerGame: 35,           // Number of cards in deck
+  minPlayers: 4,              // Minimum players to start
+  maxPlayers: 20,             // Maximum players
+  minPlayersPerTeam: 2,       // Minimum per team to start
+};
+
+// Avatars for Times Up (time themed)
+export const TIMESUP_AVATARS = [
+  '⏰', '⏱️', '⌛', '⏳', '🕐', '🕑', '🕒', '🕓',
+  '🕔', '🕕', '🕖', '🕗', '🕘', '🕙', '🕚', '🕛',
+  '⚡', '🎯', '🏆', '🎪', '🎭', '🌟', '✨', '🔔'
+];
+
 export default {};

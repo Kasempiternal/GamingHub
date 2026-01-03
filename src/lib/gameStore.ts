@@ -2,10 +2,11 @@
 // Uses in-memory fallback for local development
 
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
-import type { GameState, ImpostorGameState } from '@/types/game';
+import type { GameState, ImpostorGameState, TimesUpGameState } from '@/types/game';
 
 const GAME_PREFIX = 'game:';
 const IMPOSTOR_PREFIX = 'impostor:';
+const TIMESUP_PREFIX = 'timesup:';
 
 // Lazy initialization of Neon SQL client
 let sql: NeonQueryFunction<false, false> | null = null;
@@ -53,6 +54,7 @@ async function ensureDB() {
 // In-memory fallback for local development
 const localGames = new Map<string, GameState>();
 const localImpostorGames = new Map<string, ImpostorGameState>();
+const localTimesUpGames = new Map<string, TimesUpGameState>();
 
 // Generic get/set/delete functions for Neon
 async function neonGet<T>(key: string): Promise<T | null> {
@@ -179,4 +181,42 @@ export const impostorStore = {
   },
 };
 
-export default { gameStore, impostorStore };
+// Times Up Game Store
+export const timesUpStore = {
+  async get(roomCode: string): Promise<TimesUpGameState | null> {
+    const key = TIMESUP_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      return await neonGet<TimesUpGameState>(key);
+    }
+
+    return localTimesUpGames.get(roomCode.toUpperCase()) ?? null;
+  },
+
+  async set(roomCode: string, game: TimesUpGameState): Promise<void> {
+    const key = TIMESUP_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      await neonSet(key, game);
+    } else {
+      localTimesUpGames.set(roomCode.toUpperCase(), game);
+    }
+  },
+
+  async delete(roomCode: string): Promise<boolean> {
+    const key = TIMESUP_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      return await neonDelete(key);
+    }
+
+    return localTimesUpGames.delete(roomCode.toUpperCase());
+  },
+
+  async has(roomCode: string): Promise<boolean> {
+    const game = await this.get(roomCode);
+    return game !== null;
+  },
+};
+
+export default { gameStore, impostorStore, timesUpStore };

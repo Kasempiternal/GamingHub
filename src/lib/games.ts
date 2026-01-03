@@ -79,6 +79,19 @@ export const games: Game[] = [
     available: true,
     tagline: 'Melomano',
   },
+  {
+    id: 'times-up',
+    name: '¡Tiempo!',
+    description: 'Adivina personajes famosos en 3 rondas. Describe, una palabra, ¡mímica!',
+    icon: '⏱️',
+    gradient: 'from-orange-500 to-yellow-500',
+    accentColor: 'orange',
+    players: '4-20',
+    duration: '20-40 min',
+    href: '/times-up',
+    available: true,
+    tagline: 'Contrarreloj',
+  },
 ];
 
 // Helper to get a game by ID

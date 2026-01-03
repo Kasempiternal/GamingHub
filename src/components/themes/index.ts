@@ -29,3 +29,11 @@ export {
   Equalizer,
   VinylDecoration,
 } from '../hipster/MusicBackground';
+
+// Times Up / Time Pressure Theme
+export {
+  TimesUpBackground,
+  CountdownDisplay,
+  TimesUpExplosion,
+  RoundProgress,
+} from './TimesUpBackground';
