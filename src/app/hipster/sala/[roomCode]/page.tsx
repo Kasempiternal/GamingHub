@@ -445,6 +445,7 @@ export default function HipsterRoom() {
 
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [guessCountdown, setGuessCountdown] = useState<number>(0);
+  const [bonusCountdown, setBonusCountdown] = useState<number>(0);
 
   // Stop audio when turn phase changes (except when moving to guessing)
   useEffect(() => {
@@ -520,6 +521,30 @@ export default function HipsterRoom() {
     const interval = setInterval(updateCountdown, 100);
     return () => clearInterval(interval);
   }, [game?.currentTurn?.phase, game?.currentTurn?.guessDeadline, game?.currentTurn?.playerId, playerId, skipTurn]);
+
+  // Bonus countdown timer (30 seconds)
+  useEffect(() => {
+    if (game?.currentTurn?.phase !== 'bonus' || !game?.currentTurn?.bonusDeadline) {
+      setBonusCountdown(0);
+      return;
+    }
+
+    const isCurrentPlayersTurn = game?.currentTurn?.playerId === playerId;
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((game.currentTurn!.bonusDeadline! - Date.now()) / 1000));
+      setBonusCountdown(remaining);
+
+      // Auto-skip bonus when countdown reaches 0
+      if (remaining === 0 && isCurrentPlayersTurn) {
+        skipBonus();
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 100);
+    return () => clearInterval(interval);
+  }, [game?.currentTurn?.phase, game?.currentTurn?.bonusDeadline, game?.currentTurn?.playerId, playerId, skipBonus]);
 
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   const [selectedType, setSelectedType] = useState<'slot' | 'year' | null>(null);
@@ -969,6 +994,18 @@ export default function HipsterRoom() {
                   <div className={`text-sm ${isAudioPlaying ? 'text-purple-300' : 'text-purple-400/60'}`}>
                     {isAudioPlaying ? '🎵 Reproduciendo...' : '⏸ Esperando reproduccion...'}
                   </div>
+
+                  {/* Countdown Timer - visible to all players */}
+                  {guessCountdown > 0 && (
+                    <motion.div
+                      className={`text-2xl font-bold ${guessCountdown <= 10 ? 'text-red-400' : guessCountdown <= 30 ? 'text-yellow-400' : 'text-green-400'}`}
+                      animate={guessCountdown <= 10 ? { scale: [1, 1.1, 1] } : {}}
+                      transition={{ duration: 0.5, repeat: guessCountdown <= 10 ? Infinity : 0 }}
+                    >
+                      ⏱️ {guessCountdown}s
+                    </motion.div>
+                  )}
+
                   <p className="text-purple-400/50 text-sm">
                     {game.currentTurn.phase === 'intercepting'
                       ? 'Puedes interceptar si crees saber la posicion correcta'
@@ -1225,6 +1262,16 @@ export default function HipsterRoom() {
               <div className="text-center">
                 <span className="text-green-400 text-lg">✓ Correcto!</span>
                 <p className="text-purple-300 text-sm">Bonus: Adivina artista y titulo para ganar un token</p>
+                {/* Bonus Countdown Timer */}
+                {bonusCountdown > 0 && (
+                  <motion.div
+                    className={`text-2xl font-bold mt-2 ${bonusCountdown <= 5 ? 'text-red-400' : bonusCountdown <= 15 ? 'text-yellow-400' : 'text-green-400'}`}
+                    animate={bonusCountdown <= 5 ? { scale: [1, 1.1, 1] } : {}}
+                    transition={{ duration: 0.5, repeat: bonusCountdown <= 5 ? Infinity : 0 }}
+                  >
+                    ⏱️ {bonusCountdown}s
+                  </motion.div>
+                )}
               </div>
               <input
                 type="text"
@@ -1259,6 +1306,24 @@ export default function HipsterRoom() {
                   Adivinar
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Bonus Phase - View for non-turn players */}
+          {!isMyTurn && game.currentTurn.phase === 'bonus' && (
+            <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-green-500/20 text-center space-y-2">
+              <span className="text-green-400 text-lg">✓ {turnPlayer?.name} acerto!</span>
+              <p className="text-purple-300 text-sm">Adivinando artista y titulo para bonus...</p>
+              {/* Bonus Countdown Timer */}
+              {bonusCountdown > 0 && (
+                <motion.div
+                  className={`text-2xl font-bold ${bonusCountdown <= 5 ? 'text-red-400' : bonusCountdown <= 15 ? 'text-yellow-400' : 'text-green-400'}`}
+                  animate={bonusCountdown <= 5 ? { scale: [1, 1.1, 1] } : {}}
+                  transition={{ duration: 0.5, repeat: bonusCountdown <= 5 ? Infinity : 0 }}
+                >
+                  ⏱️ {bonusCountdown}s
+                </motion.div>
+              )}
             </div>
           )}
 

@@ -751,6 +751,7 @@ async function handleStartGame(roomCode: string, playerId: string) {
       bonusCorrect: null,
       startedAt: Date.now(),
       guessDeadline: null,
+      bonusDeadline: null,
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
@@ -793,6 +794,7 @@ async function handleSubmitGuess(roomCode: string, playerId: string, position: n
   if (isCorrect) {
     // Correct guess - skip intercept phase, go directly to bonus
     game.currentTurn.phase = 'bonus';
+    game.currentTurn.bonusDeadline = Date.now() + 30000; // 30 seconds to guess artist/title
     game.currentTurn.interceptDeadline = null;
     game.currentTurn.interceptPhase = null;
     game.currentTurn.interceptingPlayerId = null;
@@ -985,6 +987,7 @@ async function handleNextTurn(roomCode: string, playerId: string) {
       bonusCorrect: null,
       startedAt: Date.now(),
       guessDeadline: null,
+      bonusDeadline: null,
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
@@ -1238,6 +1241,7 @@ async function handleResolveIntercept(roomCode: string, playerId: string) {
   } else if (originalCorrect) {
     // Original player was correct, they get to try bonus
     game.currentTurn.phase = 'bonus';
+    game.currentTurn.bonusDeadline = Date.now() + 30000; // 30 seconds to guess artist/title
     game.currentTurn.interceptWinner = null;
     // Don't add card yet - it's added after bonus phase to hide album art
   } else {
@@ -1308,6 +1312,7 @@ async function handleSkipTurn(roomCode: string, playerId: string) {
       bonusCorrect: null,
       startedAt: Date.now(),
       guessDeadline: null,
+      bonusDeadline: null,
       intercepts: [],
       interceptDeadline: null,
       interceptWinner: null,
