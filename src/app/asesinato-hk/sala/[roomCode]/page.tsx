@@ -8,6 +8,7 @@ import { useAsesinato } from '@/hooks/useAsesinato';
 import { getRoleName, getRoleDescription } from '@/lib/asesinatoLogic';
 import { playRevealSound, playSelectSound, playVictorySound, playErrorSound, playClickSound, playWarningSound, playNotificationSound } from '@/lib/audioUtils';
 import type { AsesinatoPlayer, AsesinatoSceneTile, AsesinatoClueCard, AsesinatoMeansCard } from '@/types/game';
+import { AsesinatoHelper, AsesinatoHelperToggle } from '@/components/asesinato-hk';
 
 export default function AsesinatoRoomPage() {
   const params = useParams();
@@ -61,6 +62,14 @@ export default function AsesinatoRoomPage() {
   const [lastAccusationResult, setLastAccusationResult] = useState<{ isCorrect: boolean; accuserName: string } | null>(null);
   const [prevPhase, setPrevPhase] = useState<string | null>(null);
 
+  // Helper tutorial state
+  const [helperEnabled, setHelperEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem('asesinato_helper_enabled');
+    return stored === null ? true : stored === 'true';
+  });
+  const [helperDismissed, setHelperDismissed] = useState(false);
+
   // Play sounds on phase changes
   useEffect(() => {
     if (game?.phase && game.phase !== prevPhase) {
@@ -89,6 +98,20 @@ export default function AsesinatoRoomPage() {
       }
     }
   }, [game?.phase, discussionTimeRemaining]);
+
+  // Reset helper dismissed state on phase change
+  useEffect(() => {
+    setHelperDismissed(false);
+  }, [game?.phase]);
+
+  // Toggle helper enabled state
+  const toggleHelper = () => {
+    setHelperEnabled(prev => {
+      const newValue = !prev;
+      localStorage.setItem('asesinato_helper_enabled', String(newValue));
+      return newValue;
+    });
+  };
 
   // Loading state
   if (loading) {
@@ -731,8 +754,18 @@ export default function AsesinatoRoomPage() {
             <h1 className="text-lg font-bold text-white">Asesinato en HK</h1>
             <p className="text-xs text-slate-400">{roomCode}</p>
           </div>
-          <div className="w-6"></div>
+          <AsesinatoHelperToggle isEnabled={helperEnabled} onToggle={toggleHelper} />
         </div>
+
+        {/* Dynamic Helper Banner */}
+        {!helperDismissed && (
+          <AsesinatoHelper
+            phase={game.phase}
+            role={player?.role || null}
+            isEnabled={helperEnabled}
+            onDismiss={() => setHelperDismissed(true)}
+          />
+        )}
 
         {/* Player Role Badge */}
         {player?.role && game.phase !== 'lobby' && (
