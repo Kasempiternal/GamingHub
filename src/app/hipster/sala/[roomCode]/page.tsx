@@ -126,10 +126,12 @@ function SongSearch({ onAddSong, addedSongs, maxSongs, addedSongIds }: {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Omit<HipsterSong, 'addedBy' | 'addedAt'>[]>([]);
   const [searching, setSearching] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
 
   const search = useCallback(async () => {
-    if (!query.trim() || query.length < 2) {
+    if (!query.trim() || query.length < 3) {
       setResults([]);
+      setRateLimited(false);
       return;
     }
 
@@ -139,6 +141,7 @@ function SongSearch({ onAddSong, addedSongs, maxSongs, addedSongIds }: {
       const data = await response.json();
       if (data.success) {
         setResults(data.tracks);
+        setRateLimited(data.rateLimited || false);
       }
     } catch (e) {
       console.error('Search error:', e);
@@ -147,9 +150,9 @@ function SongSearch({ onAddSong, addedSongs, maxSongs, addedSongIds }: {
     }
   }, [query]);
 
-  // Debounced search
+  // Debounced search (500ms to reduce API calls)
   useEffect(() => {
-    const timer = setTimeout(search, 300);
+    const timer = setTimeout(search, 500);
     return () => clearTimeout(timer);
   }, [query, search]);
 
@@ -178,6 +181,12 @@ function SongSearch({ onAddSong, addedSongs, maxSongs, addedSongIds }: {
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           />
+        </div>
+      )}
+
+      {rateLimited && !searching && (
+        <div className="text-center py-2 text-amber-400/80 text-sm">
+          ⏳ Demasiadas busquedas. Espera un momento...
         </div>
       )}
 
