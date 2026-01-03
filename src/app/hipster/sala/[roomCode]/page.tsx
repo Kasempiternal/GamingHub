@@ -202,7 +202,7 @@ function SongSearch({ onAddSong, addedSongs, maxSongs, addedSongIds }: {
             <img src={track.albumArt} alt="" className="w-12 h-12 rounded-lg" />
             <div className="flex-1 min-w-0">
               <p className="text-white font-medium truncate">{track.title}</p>
-              <p className="text-purple-400/60 text-sm truncate">{track.artist} • {track.releaseYear}</p>
+              <p className="text-purple-400/60 text-sm truncate">{track.artist}</p>
             </div>
             <button
               onClick={() => onAddSong(track)}

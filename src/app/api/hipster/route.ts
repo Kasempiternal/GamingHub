@@ -136,9 +136,11 @@ function isOriginalTrack(trackName: string): boolean {
 
 // Draw a song for a player (anti-cheat: exclude their contributions)
 // Dynamically injects more songs from catalog if pool is exhausted
+// preferUserSongs: If true, prioritize user-contributed songs over system songs
 async function drawSongForPlayer(
   game: HipsterGameState,
-  playerId: string
+  playerId: string,
+  preferUserSongs: boolean = false
 ): Promise<HipsterSong | null> {
   const { songPool, usedSongs } = game;
 
@@ -146,6 +148,15 @@ async function drawSongForPlayer(
   let available = songPool.filter(song =>
     !usedSongs.includes(song.id) && song.addedBy !== playerId
   );
+
+  // If preferring user songs (first 5 turns), filter to user-contributed only
+  if (preferUserSongs) {
+    const userSongs = available.filter(song => song.addedBy !== 'system');
+    if (userSongs.length > 0) {
+      available = userSongs;
+    }
+    // Fall through to all available if no user songs left
+  }
 
   // If running low on songs, proactively inject more from catalog
   if (available.length < 3) {
@@ -723,9 +734,15 @@ async function handleStartGame(roomCode: string, playerId: string) {
   game.turnOrder = shuffleArray(game.players.map(p => p.id));
   game.currentPlayerIndex = 0;
 
-  // Deal initial card to each player
+  // Deal initial card to each player (SYSTEM songs only - not user-contributed)
   for (const p of game.players) {
-    const song = await drawSongForPlayer(game, p.id);
+    // Initial timeline cards are system songs only (not from users)
+    const systemSongs = game.songPool.filter(song =>
+      !game.usedSongs.includes(song.id) && song.addedBy === 'system'
+    );
+    const song = systemSongs.length > 0
+      ? systemSongs[Math.floor(Math.random() * systemSongs.length)]
+      : await drawSongForPlayer(game, p.id); // Fallback if no system songs
     if (song) {
       p.timeline.push({
         song,
@@ -736,9 +753,10 @@ async function handleStartGame(roomCode: string, playerId: string) {
     }
   }
 
-  // Start first turn
+  // Start first turn - first 5 songs played should be from users
   const firstPlayerId = game.turnOrder[0];
-  const firstSong = await drawSongForPlayer(game, firstPlayerId);
+  const preferUserSongs = game.usedSongs.length < (game.players.length + 5);
+  const firstSong = await drawSongForPlayer(game, firstPlayerId, preferUserSongs);
 
   if (firstSong) {
     game.currentTurn = {
@@ -973,8 +991,9 @@ async function handleNextTurn(roomCode: string, playerId: string) {
   game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.turnOrder.length;
   const nextPlayerId = game.turnOrder[game.currentPlayerIndex];
 
-  // Draw new song for next player (may inject more songs if pool is low)
-  const nextSong = await drawSongForPlayer(game, nextPlayerId);
+  // Draw new song for next player - first 5 songs should be from users
+  const preferUserSongs = game.usedSongs.length < (game.players.length + 5);
+  const nextSong = await drawSongForPlayer(game, nextPlayerId, preferUserSongs);
 
   if (nextSong) {
     game.currentTurn = {
@@ -1298,8 +1317,9 @@ async function handleSkipTurn(roomCode: string, playerId: string) {
   game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.turnOrder.length;
   const nextPlayerId = game.turnOrder[game.currentPlayerIndex];
 
-  // Draw new song for next player (may inject more songs if pool is low)
-  const nextSong = await drawSongForPlayer(game, nextPlayerId);
+  // Draw new song for next player - first 5 songs should be from users
+  const preferUserSongs = game.usedSongs.length < (game.players.length + 5);
+  const nextSong = await drawSongForPlayer(game, nextPlayerId, preferUserSongs);
 
   if (nextSong) {
     game.currentTurn = {
