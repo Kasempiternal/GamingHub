@@ -167,10 +167,13 @@ export function RoleReveal({
   }
 
   // Full mode for roleReveal phase
+  // IMPORTANT: Use neutral color when hidden, only show role color when revealed
+  const hiddenColor = 'from-slate-700 to-slate-900 border-slate-600';
+
   return (
     <div className="relative">
       <motion.div
-        className={`relative overflow-hidden rounded-2xl border-2 cursor-pointer select-none bg-gradient-to-br ${getRoleColor()}`}
+        className={`relative overflow-hidden rounded-2xl border-2 cursor-pointer select-none bg-gradient-to-br ${isRevealed ? getRoleColor() : hiddenColor}`}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerLeave}

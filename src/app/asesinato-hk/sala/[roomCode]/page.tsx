@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -604,27 +604,14 @@ export default function AsesinatoRoomPage() {
               </p>
             </div>
 
-            {/* Solution display for those who can see it */}
+            {/* Solution display - hidden behind hold-to-reveal */}
             {(isForensicScientist || isMurderer || isAccomplice) && game.solution && (
-              <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-4">
-                <h3 className="text-red-400 font-semibold mb-2">El Crimen (secreto)</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-slate-400 text-sm">Evidencia:</p>
-                    <p className="text-white font-medium">
-                      {game.players.find(p => p.id === game.solution?.murdererPlayerId)
-                        ?.clueCards.find(c => c.id === game.solution?.keyEvidenceId)?.name}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">Metodo:</p>
-                    <p className="text-white font-medium">
-                      {game.players.find(p => p.id === game.solution?.murdererPlayerId)
-                        ?.meansCards.find(c => c.id === game.solution?.meansOfMurderId)?.name}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <SolutionReveal
+                evidenceName={game.players.find(p => p.id === game.solution?.murdererPlayerId)
+                  ?.clueCards.find(c => c.id === game.solution?.keyEvidenceId)?.name || ''}
+                meansName={game.players.find(p => p.id === game.solution?.murdererPlayerId)
+                  ?.meansCards.find(c => c.id === game.solution?.meansOfMurderId)?.name || ''}
+              />
             )}
 
             {/* Scene Tiles */}
@@ -1148,6 +1135,76 @@ export default function AsesinatoRoomPage() {
         )}
       </AnimatePresence>
     </main>
+  );
+}
+
+// Solution Reveal Component - hides solution behind hold-to-reveal
+function SolutionReveal({ evidenceName, meansName }: { evidenceName: string; meansName: string }) {
+  const [isRevealed, setIsRevealed] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isRevealed) {
+      timeoutRef.current = setTimeout(() => setIsRevealed(false), 5000);
+    }
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+  }, [isRevealed]);
+
+  const handlePointerDown = (e: React.PointerEvent) => { e.preventDefault(); setIsRevealed(true); };
+  const handlePointerUp = () => { setIsRevealed(false); if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+
+  return (
+    <motion.div
+      className={`rounded-xl p-4 cursor-pointer select-none transition-colors ${
+        isRevealed ? 'bg-red-900/30 border border-red-700/50' : 'bg-slate-800/50 border border-slate-700'
+      }`}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{ touchAction: 'none' }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <AnimatePresence mode="wait">
+        {!isRevealed ? (
+          <motion.div
+            key="hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center justify-center gap-3 py-2"
+          >
+            <motion.span
+              className="text-2xl"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              🔒
+            </motion.span>
+            <span className="text-slate-400 text-sm">Mantén presionado para ver el crimen</span>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="revealed"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <h3 className="text-red-400 font-semibold mb-2">El Crimen (secreto)</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-slate-400 text-sm">Evidencia:</p>
+                <p className="text-white font-medium">{evidenceName}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-sm">Metodo:</p>
+                <p className="text-white font-medium">{meansName}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
