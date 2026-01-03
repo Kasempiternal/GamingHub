@@ -35,54 +35,19 @@ const helperContent: HelperContentMap = {
         'NO puedes hablar ni gesticular - solo colocar marcadores',
       ],
     },
-    murderer: {
-      title: 'Eres el Asesino',
-      emoji: '🔪',
+    // All non-FS players see this neutral message
+    default: {
+      title: 'Tu rol secreto',
+      emoji: '🎭',
       tips: [
-        'Pronto elegiras UNA evidencia y UN metodo de tus cartas',
-        'El Cientifico Forense conocera tu crimen',
-        'Debes desviar las sospechas de los investigadores',
-      ],
-    },
-    accomplice: {
-      title: 'Eres el Complice',
-      emoji: '🤝',
-      tips: [
-        'Conoces al asesino y pronto sabras su crimen',
-        'Ayuda a desviar sospechas sin revelar tu identidad',
-        'Si atrapan al asesino, tambien pierdes',
-      ],
-    },
-    witness: {
-      title: 'Eres el Testigo',
-      emoji: '👁',
-      tips: [
-        'Viste quien es el asesino y el complice',
-        'NO conoces cual fue el crimen exacto',
-        'Ten cuidado de no revelarte demasiado',
-      ],
-    },
-    investigator: {
-      title: 'Eres un Investigador',
-      emoji: '🔍',
-      tips: [
-        'Tu objetivo es identificar al asesino, la evidencia y el metodo',
-        'Analiza las pistas del Cientifico Forense',
-        'Solo tienes UNA acusacion - usala sabiamente',
+        'Manten presionado para ver tu rol',
+        'No dejes que otros vean tu pantalla',
+        'Recuerda bien tu objetivo',
       ],
     },
   },
 
   murderSelection: {
-    murderer: {
-      title: 'Elige tu crimen',
-      emoji: '💀',
-      tips: [
-        'Selecciona UNA carta de evidencia de tu mano',
-        'Selecciona UNA carta de metodo de tu mano',
-        'Elige combinaciones dificiles de adivinar',
-      ],
-    },
     forensicScientist: {
       title: 'Noche del crimen',
       emoji: '🌙',
@@ -91,27 +56,13 @@ const helperContent: HelperContentMap = {
         'Pronto conoceras la solucion y deberas dar pistas',
       ],
     },
-    accomplice: {
+    // All non-FS players see the same neutral message
+    default: {
       title: 'Noche del crimen',
       emoji: '🌙',
       tips: [
-        'Tu companero asesino esta eligiendo el crimen',
-        'Pronto conoceras la solucion para ayudar a encubrir',
-      ],
-    },
-    witness: {
-      title: 'Noche del crimen',
-      emoji: '🌙',
-      tips: [
-        'El asesino esta eligiendo su crimen',
-        'Tu sabes quien es, pero no que eligio',
-      ],
-    },
-    investigator: {
-      title: 'Noche del crimen',
-      emoji: '🌙',
-      tips: [
-        'El asesino esta eligiendo su crimen',
+        'Manten los ojos cerrados',
+        'El crimen se esta cometiendo',
         'Pronto comenzara la investigacion',
       ],
     },
@@ -128,34 +79,8 @@ const helperContent: HelperContentMap = {
         'En rondas 2-3 puedes reemplazar una ficha',
       ],
     },
-    murderer: {
-      title: 'Observa las pistas',
-      emoji: '😈',
-      tips: [
-        'Conoces el crimen - usa las pistas para confundir',
-        'Sugiere interpretaciones alternativas de las pistas',
-        'No te delates defendiendote demasiado',
-      ],
-    },
-    accomplice: {
-      title: 'Ayuda a confundir',
-      emoji: '🎭',
-      tips: [
-        'Conoces el crimen - ayuda a desviar sospechas',
-        'Sugiere pistas falsas o interpretaciones erroneas',
-        'Actua como un investigador normal',
-      ],
-    },
-    witness: {
-      title: 'El forense da pistas',
-      emoji: '👀',
-      tips: [
-        'Observa las pistas del Cientifico Forense',
-        'Recuerda quien es el asesino cuando analices',
-        'Puedes dar pistas sutiles sin revelarte',
-      ],
-    },
-    investigator: {
+    // All non-FS players see the same tips
+    default: {
       title: 'El forense da pistas',
       emoji: '🧩',
       tips: [
@@ -176,39 +101,13 @@ const helperContent: HelperContentMap = {
         'En la ultima ronda el juego terminara automaticamente',
       ],
     },
-    murderer: {
-      title: 'Defiendete',
-      emoji: '🗣',
-      tips: [
-        'Participa activamente sin ser sospechoso',
-        'Apunta sospechas hacia otros jugadores',
-        'Defiende tus cartas de forma natural',
-      ],
-    },
-    accomplice: {
-      title: 'Ayuda al asesino',
-      emoji: '🛡',
-      tips: [
-        'Defiende sutilmente al asesino',
-        'Sugiere otras combinaciones de cartas',
-        'No seas demasiado obvio en tu defensa',
-      ],
-    },
-    witness: {
-      title: 'Guia la discusion',
-      emoji: '💡',
-      tips: [
-        'Puedes dirigir sospechas hacia el asesino',
-        'Cuidado: el asesino podria descubrir que eres testigo',
-        'Se sutil para no exponerte',
-      ],
-    },
-    investigator: {
+    // All non-FS players see the same tips
+    default: {
       title: 'Investiga y acusa',
       emoji: '🎯',
       tips: [
         'Analiza las pistas y las cartas de cada jugador',
-        'Discute tus teorias con otros investigadores',
+        'Discute tus teorias con otros jugadores',
         'Solo tienes UNA acusacion - asegurate antes de usarla',
       ],
     },
@@ -233,9 +132,16 @@ export function getHelperContent(
 ): HelperContent {
   const phaseContent = helperContent[phase];
 
-  // Try role-specific content first
-  if (role && phaseContent[role]) {
-    return phaseContent[role]!;
+  // IMPORTANT: Only show role-specific content to Forensic Scientist
+  // Everyone else sees investigator tips to prevent role leaking via helper
+  if (role === 'forensicScientist' && phaseContent.forensicScientist) {
+    return phaseContent.forensicScientist;
+  }
+
+  // For all other roles, show investigator content (or default)
+  // This prevents nearby players from seeing role-specific tips
+  if (phaseContent.investigator) {
+    return phaseContent.investigator;
   }
 
   // Fall back to default content
