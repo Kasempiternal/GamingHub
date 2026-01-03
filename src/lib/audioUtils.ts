@@ -4,16 +4,37 @@
 let audioContext: AudioContext | null = null;
 
 function getAudioContext(): AudioContext {
+  if (typeof window === 'undefined') {
+    throw new Error('Audio not available on server');
+  }
   if (!audioContext) {
     audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
   }
   return audioContext;
 }
 
-// Play a simple tone
-export function playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.3) {
+// Ensure audio context is resumed (required after user gesture on mobile)
+async function ensureAudioReady(): Promise<AudioContext> {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') {
+    await ctx.resume();
+  }
+  return ctx;
+}
+
+// Initialize audio on user interaction (call this early!)
+export async function initAudio(): Promise<void> {
   try {
-    const ctx = getAudioContext();
+    await ensureAudioReady();
+  } catch {
+    // Audio not available
+  }
+}
+
+// Play a simple tone (async to ensure context is ready)
+export async function playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.3): Promise<void> {
+  try {
+    const ctx = await ensureAudioReady();
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
@@ -100,7 +121,15 @@ export function playSelectSound() {
 // ============================================
 
 // Play countdown "3, 2, 1" beeps
-export function playCountdownSound(): Promise<void> {
+export async function playCountdownSound(): Promise<void> {
+  // Ensure audio is ready first (critical for countdown!)
+  try {
+    await ensureAudioReady();
+  } catch {
+    // Still resolve after delay even if audio fails
+    return new Promise(resolve => setTimeout(resolve, 1800));
+  }
+
   return new Promise((resolve) => {
     // "3" - high beep
     playTone(880, 0.25, 'sine', 0.3);
@@ -124,6 +153,10 @@ let sleepingAmbienceNodes: { oscillators: OscillatorNode[]; gains: GainNode[] } 
 export function startSleepingAmbience(): () => void {
   try {
     const ctx = getAudioContext();
+    // Resume audio context if suspended (critical for mobile!)
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
     const oscillators: OscillatorNode[] = [];
     const gains: GainNode[] = [];
 
@@ -217,7 +250,13 @@ export function stopSleepingAmbience() {
 }
 
 // Wake up alert sound with rising tones
-export function playWakeUpSound() {
+export async function playWakeUpSound(): Promise<void> {
+  // Ensure audio is ready first (critical for wake-up!)
+  try {
+    await ensureAudioReady();
+  } catch {
+    return;
+  }
   // Rising fanfare
   playTone(440, 0.15, 'sine', 0.25); // A4
   setTimeout(() => playTone(554, 0.15, 'sine', 0.3), 150); // C#5

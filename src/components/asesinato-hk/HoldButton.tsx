@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { initAudio } from '@/lib/audioUtils';
 
 interface HoldButtonProps {
   onHoldStart: () => void;
@@ -22,8 +23,16 @@ export function HoldButton({
 }: HoldButtonProps) {
   const isHoldingRef = useRef(false);
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback((e?: React.TouchEvent | React.MouseEvent) => {
+    // Prevent default to avoid scroll/zoom on mobile
+    if (e && 'touches' in e) {
+      e.preventDefault();
+    }
     if (disabled) return;
+
+    // Initialize audio on first interaction (critical for mobile!)
+    initAudio();
+
     if (isFake) {
       // Fake button does nothing but looks like it's working
       return;
@@ -34,12 +43,25 @@ export function HoldButton({
     }
   }, [disabled, isFake, onHoldStart]);
 
-  const handleEnd = useCallback(() => {
-    if (isFake) return;
+  const handleEnd = useCallback((e?: React.TouchEvent | React.MouseEvent) => {
+    // Prevent default on touch events
+    if (e && 'touches' in e) {
+      e.preventDefault();
+    }
+    if (disabled || isFake) return;
     if (isHoldingRef.current) {
       isHoldingRef.current = false;
       onHoldEnd();
     }
+  }, [disabled, isFake, onHoldEnd]);
+
+  // Cleanup: call onHoldEnd if component unmounts while holding
+  useEffect(() => {
+    return () => {
+      if (isHoldingRef.current && !isFake) {
+        onHoldEnd();
+      }
+    };
   }, [isFake, onHoldEnd]);
 
   // Prevent context menu on long press
@@ -62,12 +84,12 @@ export function HoldButton({
             : 'bg-slate-800 border-4 border-slate-600 hover:border-slate-500'
         }
       `}
-      onMouseDown={handleStart}
-      onMouseUp={handleEnd}
-      onMouseLeave={handleEnd}
-      onTouchStart={handleStart}
-      onTouchEnd={handleEnd}
-      onTouchCancel={handleEnd}
+      onMouseDown={(e) => handleStart(e)}
+      onMouseUp={(e) => handleEnd(e)}
+      onMouseLeave={() => handleEnd()}
+      onTouchStart={(e) => handleStart(e)}
+      onTouchEnd={(e) => handleEnd(e)}
+      onTouchCancel={() => handleEnd()}
       onContextMenu={handleContextMenu}
       disabled={disabled}
       whileTap={disabled ? {} : { scale: 0.98 }}

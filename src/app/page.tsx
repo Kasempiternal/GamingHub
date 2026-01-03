@@ -327,7 +327,7 @@ export default function Home() {
             animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="text-white/40 text-xs font-medium">v2.12.0 - Clarity Edition</span>
+          <span className="text-white/40 text-xs font-medium">v2.12.1 - Audio Fix</span>
         </motion.div>
       </motion.header>
 
