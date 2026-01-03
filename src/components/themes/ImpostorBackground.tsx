@@ -160,12 +160,12 @@ export function EmergencyMeeting({ isActive, onComplete }: { isActive: boolean; 
   useEffect(() => {
     if (isActive) {
       setStage('alarm');
-      const t1 = setTimeout(() => setStage('zoom'), 500);
-      const t2 = setTimeout(() => setStage('text'), 1200);
+      const t1 = setTimeout(() => setStage('zoom'), 800);
+      const t2 = setTimeout(() => setStage('text'), 1800);
       const t3 = setTimeout(() => {
         setStage('idle');
         onComplete?.();
-      }, 3000);
+      }, 5000);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);

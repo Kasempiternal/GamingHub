@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,6 +28,11 @@ export default function ImpostorRoom() {
   const [showRevealAnimation, setShowRevealAnimation] = useState(false);
   const [revealingPlayer, setRevealingPlayer] = useState<ImpostorPlayer | null>(null);
   const [showEmergencyMeeting, setShowEmergencyMeeting] = useState(false);
+
+  // Memoize callback to prevent animation restart on re-renders
+  const handleEmergencyMeetingComplete = useCallback(() => {
+    setShowEmergencyMeeting(false);
+  }, []);
 
   useEffect(() => {
     const stored = sessionStorage.getItem('impostorPlayerId');
@@ -119,7 +124,7 @@ export default function ImpostorRoom() {
       {/* Emergency Meeting Animation */}
       <EmergencyMeeting
         isActive={showEmergencyMeeting}
-        onComplete={() => setShowEmergencyMeeting(false)}
+        onComplete={handleEmergencyMeetingComplete}
       />
 
       {/* Header */}
