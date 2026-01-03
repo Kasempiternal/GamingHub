@@ -496,7 +496,10 @@ export default function HipsterRoom() {
   const [interceptPosition, setInterceptPosition] = useState<number | null>(null);
   const [showInterceptUI, setShowInterceptUI] = useState(false);
   const [interceptCountdown, setInterceptCountdown] = useState<number>(0);
+  const [interceptClaimError, setInterceptClaimError] = useState<string | null>(null);
+  const [showInterceptClaimed, setShowInterceptClaimed] = useState(false);
   const interceptRef = useRef<HTMLDivElement>(null);
+  const prevInterceptingPlayerId = useRef<string | null>(null);
 
   // Auto-scroll to intercept UI when phase starts
   useEffect(() => {
@@ -504,6 +507,29 @@ export default function HipsterRoom() {
       interceptRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [game?.currentTurn?.phase]);
+
+  // Detect when someone claims the intercept (real-time feedback)
+  useEffect(() => {
+    const currentInterceptor = game?.currentTurn?.interceptingPlayerId;
+
+    // Someone just claimed the intercept (and it wasn't already claimed before)
+    if (currentInterceptor && !prevInterceptingPlayerId.current) {
+      // Show notification if it's not the current player who claimed
+      if (currentInterceptor !== playerId) {
+        setShowInterceptClaimed(true);
+        // Auto-hide after 3 seconds
+        setTimeout(() => setShowInterceptClaimed(false), 3000);
+      }
+    }
+
+    // Reset when intercept phase ends
+    if (!game?.currentTurn?.phase || game.currentTurn.phase !== 'intercepting') {
+      setShowInterceptClaimed(false);
+      setInterceptClaimError(null);
+    }
+
+    prevInterceptingPlayerId.current = currentInterceptor ?? null;
+  }, [game?.currentTurn?.interceptingPlayerId, game?.currentTurn?.phase, playerId]);
 
   // Rejoin game if not connected
   useEffect(() => {
@@ -1028,18 +1054,70 @@ export default function HipsterRoom() {
                       </div>
                     )}
 
+                    {/* Real-time notification when someone claims */}
+                    {showInterceptClaimed && game.currentTurn.interceptingPlayerId && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-yellow-500/30 border border-yellow-400 rounded-lg p-3 text-center"
+                      >
+                        <p className="text-yellow-300 font-bold flex items-center justify-center gap-2">
+                          <motion.span
+                            animate={{ scale: [1, 1.3, 1] }}
+                            transition={{ duration: 0.5, repeat: 2 }}
+                          >
+                            🎯
+                          </motion.span>
+                          {game.players.find(p => p.id === game.currentTurn?.interceptingPlayerId)?.name} ha interceptado!
+                        </p>
+                      </motion.div>
+                    )}
+
+                    {/* Error notification when claim fails */}
+                    {interceptClaimError && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-red-500/20 border border-red-500/50 rounded-lg p-2 text-center"
+                      >
+                        <p className="text-red-300 text-sm">{interceptClaimError}</p>
+                      </motion.div>
+                    )}
+
                     {/* Intercept button - first to click wins */}
                     <div className="flex flex-col items-center gap-2">
                       {currentPlayer && currentPlayer.tokens > 0 ? (
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => intercept(null)} // null = claiming phase 1
-                          className="px-6 py-3 bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 rounded-xl font-medium flex items-center gap-2"
-                        >
-                          <span>🎯</span>
-                          Interceptar (1 token)
-                        </motion.button>
+                        (() => {
+                          const alreadyClaimed = !!game.currentTurn.interceptingPlayerId;
+                          return (
+                            <motion.button
+                              whileHover={!alreadyClaimed ? { scale: 1.02 } : {}}
+                              whileTap={!alreadyClaimed ? { scale: 0.98 } : {}}
+                              onClick={async () => {
+                                if (alreadyClaimed) {
+                                  setInterceptClaimError('Ya alguien ha reclamado la interceptación');
+                                  setTimeout(() => setInterceptClaimError(null), 2000);
+                                  return;
+                                }
+                                const success = await intercept(null);
+                                if (!success) {
+                                  setInterceptClaimError('No pudiste interceptar - alguien fue más rápido!');
+                                  setTimeout(() => setInterceptClaimError(null), 2000);
+                                }
+                              }}
+                              disabled={alreadyClaimed}
+                              className={`px-6 py-3 rounded-xl font-medium flex items-center gap-2 transition-all ${
+                                alreadyClaimed
+                                  ? 'bg-gray-500/20 border border-gray-500/40 text-gray-400 cursor-not-allowed'
+                                  : 'bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/30'
+                              }`}
+                            >
+                              <span>🎯</span>
+                              {alreadyClaimed ? 'Ya interceptado' : 'Interceptar (1 token)'}
+                            </motion.button>
+                          );
+                        })()
                       ) : (
                         <p className="text-purple-400/50 text-sm">No tienes tokens para interceptar</p>
                       )}
