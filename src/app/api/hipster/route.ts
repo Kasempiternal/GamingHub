@@ -1103,12 +1103,14 @@ async function handleIntercept(roomCode: string, playerId: string, position: num
 
     if (interceptCorrect) {
       // Interceptor wins! Add card to interceptor's timeline
+      // Calculate correct position for INTERCEPTOR's timeline (not turn player's)
+      const insertPosition = findChronologicalPosition(player.timeline, song.releaseYear);
       const newCard: HipsterTimelineCard = {
         song,
-        position,
+        position: insertPosition,
         placedAt: Date.now(),
       };
-      player.timeline.splice(position, 0, newCard);
+      player.timeline.splice(insertPosition, 0, newCard);
       player.timeline.forEach((card, idx) => { card.position = idx; });
 
       game.currentTurn.interceptWinner = playerId;

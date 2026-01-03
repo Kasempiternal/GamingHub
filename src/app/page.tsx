@@ -321,7 +321,7 @@ export default function Home() {
             animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="text-white/40 text-xs font-medium">v2.7.2 - Cache Edition</span>
+          <span className="text-white/40 text-xs font-medium">v2.7.3 - Timeline Fix</span>
         </motion.div>
       </motion.header>
 
