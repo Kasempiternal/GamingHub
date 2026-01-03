@@ -297,35 +297,52 @@ function Timeline({ timeline, onSelectPosition, selectedPosition, isInteractive 
 
         return (
           <div key={group.year} className="flex items-center gap-2 flex-shrink-0">
-            {/* Year group - stacked if multiple cards (display only, not clickable) */}
+            {/* Year group - clickable for same-year selection */}
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-1.5 text-center"
+              onClick={() => isInteractive && onSelectPosition?.(positionAfterGroup)}
+              className={`flex-shrink-0 bg-purple-500/20 border border-purple-500/30 rounded-lg p-1.5 text-center ${
+                isInteractive ? 'cursor-pointer hover:bg-purple-500/30 hover:border-purple-400/50 transition-colors' : ''
+              }`}
               style={{ minWidth: group.cards.length > 1 ? '3.5rem' : '3rem' }}
             >
               {/* Stacked album arts for same-year songs */}
               <div className={`relative ${group.cards.length > 1 ? 'h-12' : ''}`}>
                 {group.cards.map((card, cardIndex) => (
-                  <img
-                    key={card.song.id}
-                    src={card.song.albumArt}
-                    alt=""
-                    className={`rounded-md ${
-                      group.cards.length > 1
-                        ? 'absolute w-10 h-10 border border-slate-900'
-                        : 'w-10 h-10'
-                    }`}
-                    style={
-                      group.cards.length > 1
-                        ? {
-                            left: `${cardIndex * 8}px`,
-                            top: `${cardIndex * 6}px`,
-                            zIndex: cardIndex,
-                          }
-                        : undefined
-                    }
-                  />
+                  card.song.albumArt ? (
+                    <img
+                      key={card.song.id}
+                      src={card.song.albumArt}
+                      alt=""
+                      className={`rounded-md ${
+                        group.cards.length > 1
+                          ? 'absolute w-10 h-10 border border-slate-900'
+                          : 'w-10 h-10'
+                      }`}
+                      style={
+                        group.cards.length > 1
+                          ? { left: `${cardIndex * 8}px`, top: `${cardIndex * 6}px`, zIndex: cardIndex }
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <div
+                      key={card.song.id}
+                      className={`rounded-md bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center ${
+                        group.cards.length > 1
+                          ? 'absolute w-10 h-10 border border-slate-900'
+                          : 'w-10 h-10'
+                      }`}
+                      style={
+                        group.cards.length > 1
+                          ? { left: `${cardIndex * 8}px`, top: `${cardIndex * 6}px`, zIndex: cardIndex }
+                          : undefined
+                      }
+                    >
+                      <span className="text-lg">🎵</span>
+                    </div>
+                  )
                 ))}
               </div>
               <p className="text-white text-[10px] font-bold mt-1">
