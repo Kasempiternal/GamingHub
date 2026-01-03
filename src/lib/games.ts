@@ -92,6 +92,32 @@ export const games: Game[] = [
     available: true,
     tagline: 'Contrarreloj',
   },
+  {
+    id: 'wavelength',
+    name: 'Longitud de Onda',
+    description: 'Adivina el espectro. Da pistas para que tu equipo encuentre el punto exacto.',
+    icon: '📻',
+    gradient: 'from-cyan-500 to-blue-600',
+    accentColor: 'cyan',
+    players: '4-12',
+    duration: '30-45 min',
+    href: '/wavelength',
+    available: true,
+    tagline: 'Sintoniza la mente',
+  },
+  {
+    id: 'asesinato-hk',
+    name: 'Asesinato en Hong Kong',
+    description: 'Deduccion y engaño. El forense da pistas abstractas para resolver el crimen.',
+    icon: '🔪',
+    gradient: 'from-red-900 to-slate-900',
+    accentColor: 'red',
+    players: '4-12',
+    duration: '20-30 min',
+    href: '/asesinato-hk',
+    available: true,
+    tagline: 'El crimen perfecto',
+  },
 ];
 
 // Helper to get a game by ID

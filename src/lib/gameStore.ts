@@ -2,11 +2,13 @@
 // Uses in-memory fallback for local development
 
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
-import type { GameState, ImpostorGameState, TimesUpGameState } from '@/types/game';
+import type { GameState, ImpostorGameState, TimesUpGameState, WavelengthGameState, AsesinatoGameState } from '@/types/game';
 
 const GAME_PREFIX = 'game:';
 const IMPOSTOR_PREFIX = 'impostor:';
 const TIMESUP_PREFIX = 'timesup:';
+const WAVELENGTH_PREFIX = 'wavelength:';
+const ASESINATO_PREFIX = 'asesinato:';
 
 // Lazy initialization of Neon SQL client
 let sql: NeonQueryFunction<false, false> | null = null;
@@ -52,9 +54,29 @@ async function ensureDB() {
 }
 
 // In-memory fallback for local development
-const localGames = new Map<string, GameState>();
-const localImpostorGames = new Map<string, ImpostorGameState>();
-const localTimesUpGames = new Map<string, TimesUpGameState>();
+// Use globalThis to persist across Next.js hot reloads
+const globalForGames = globalThis as unknown as {
+  localGames: Map<string, GameState>;
+  localImpostorGames: Map<string, ImpostorGameState>;
+  localTimesUpGames: Map<string, TimesUpGameState>;
+  localWavelengthGames: Map<string, WavelengthGameState>;
+  localAsesinatoGames: Map<string, AsesinatoGameState>;
+};
+
+const localGames = globalForGames.localGames ?? new Map<string, GameState>();
+const localImpostorGames = globalForGames.localImpostorGames ?? new Map<string, ImpostorGameState>();
+const localTimesUpGames = globalForGames.localTimesUpGames ?? new Map<string, TimesUpGameState>();
+const localWavelengthGames = globalForGames.localWavelengthGames ?? new Map<string, WavelengthGameState>();
+const localAsesinatoGames = globalForGames.localAsesinatoGames ?? new Map<string, AsesinatoGameState>();
+
+// Store references in globalThis to persist across hot reloads
+if (process.env.NODE_ENV !== 'production') {
+  globalForGames.localGames = localGames;
+  globalForGames.localImpostorGames = localImpostorGames;
+  globalForGames.localTimesUpGames = localTimesUpGames;
+  globalForGames.localWavelengthGames = localWavelengthGames;
+  globalForGames.localAsesinatoGames = localAsesinatoGames;
+}
 
 // Generic get/set/delete functions for Neon
 async function neonGet<T>(key: string): Promise<T | null> {
@@ -219,4 +241,80 @@ export const timesUpStore = {
   },
 };
 
-export default { gameStore, impostorStore, timesUpStore };
+// Wavelength Game Store
+export const wavelengthStore = {
+  async get(roomCode: string): Promise<WavelengthGameState | null> {
+    const key = WAVELENGTH_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      return await neonGet<WavelengthGameState>(key);
+    }
+
+    return localWavelengthGames.get(roomCode.toUpperCase()) ?? null;
+  },
+
+  async set(roomCode: string, game: WavelengthGameState): Promise<void> {
+    const key = WAVELENGTH_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      await neonSet(key, game);
+    } else {
+      localWavelengthGames.set(roomCode.toUpperCase(), game);
+    }
+  },
+
+  async delete(roomCode: string): Promise<boolean> {
+    const key = WAVELENGTH_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      return await neonDelete(key);
+    }
+
+    return localWavelengthGames.delete(roomCode.toUpperCase());
+  },
+
+  async has(roomCode: string): Promise<boolean> {
+    const game = await this.get(roomCode);
+    return game !== null;
+  },
+};
+
+// Asesinato en Hong Kong Game Store
+export const asesinatoStore = {
+  async get(roomCode: string): Promise<AsesinatoGameState | null> {
+    const key = ASESINATO_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      return await neonGet<AsesinatoGameState>(key);
+    }
+
+    return localAsesinatoGames.get(roomCode.toUpperCase()) ?? null;
+  },
+
+  async set(roomCode: string, game: AsesinatoGameState): Promise<void> {
+    const key = ASESINATO_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      await neonSet(key, game);
+    } else {
+      localAsesinatoGames.set(roomCode.toUpperCase(), game);
+    }
+  },
+
+  async delete(roomCode: string): Promise<boolean> {
+    const key = ASESINATO_PREFIX + roomCode.toUpperCase();
+
+    if (getSQL()) {
+      return await neonDelete(key);
+    }
+
+    return localAsesinatoGames.delete(roomCode.toUpperCase());
+  },
+
+  async has(roomCode: string): Promise<boolean> {
+    const game = await this.get(roomCode);
+    return game !== null;
+  },
+};
+
+export default { gameStore, impostorStore, timesUpStore, wavelengthStore, asesinatoStore };

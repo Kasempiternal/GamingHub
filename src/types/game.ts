@@ -547,4 +547,225 @@ export const TIMESUP_AVATARS = [
   '⚡', '🎯', '🏆', '🎪', '🎭', '🌟', '✨', '🔔'
 ];
 
+// ============================================
+// WAVELENGTH GAME TYPES (Longitud de Onda)
+// ============================================
+
+export type WavelengthPhase = 'lobby' | 'psychicClue' | 'teamGuess' | 'counterGuess' | 'reveal' | 'roundEnd' | 'finished';
+export type WavelengthTeam = 'red' | 'blue';
+
+export interface WavelengthSpectrumCard {
+  id: string;
+  leftConcept: string;   // e.g., "Frío"
+  rightConcept: string;  // e.g., "Caliente"
+}
+
+export interface WavelengthPlayer {
+  id: string;
+  name: string;
+  deviceId?: string;
+  avatar: string;
+  team: WavelengthTeam | null;
+  isHost: boolean;
+  isPsychic: boolean;  // Current round's psychic
+}
+
+export interface WavelengthRound {
+  roundNumber: number;
+  psychicId: string;
+  psychicTeam: WavelengthTeam;
+  spectrumCard: WavelengthSpectrumCard;
+  targetPosition: number;         // 0-100 (hidden until reveal)
+  clue: string | null;            // Psychic's clue
+  teamGuess: number | null;       // 0-100
+  counterGuess: 'left' | 'right' | null;  // Opposing team's guess
+  pointsAwarded: number;          // 0, 2, 3, or 4
+  counterPointAwarded: boolean;   // Did opposing team get 1 point?
+  startedAt: number;
+  endedAt: number | null;
+}
+
+export interface WavelengthGameState {
+  roomCode: string;
+  phase: WavelengthPhase;
+  players: WavelengthPlayer[];
+
+  // Teams
+  redTeam: string[];              // Player IDs
+  blueTeam: string[];             // Player IDs
+
+  // Scores
+  redScore: number;
+  blueScore: number;
+  targetScore: number;            // Default: 10
+
+  // Current round
+  currentRound: WavelengthRound | null;
+  rounds: WavelengthRound[];
+
+  // Turn tracking
+  currentTeam: WavelengthTeam;
+  redPsychicIndex: number;        // Rotates through red team
+  bluePsychicIndex: number;       // Rotates through blue team
+
+  // Deck
+  usedCardIds: string[];          // Track used spectrum cards
+
+  winner: WavelengthTeam | null;
+  createdAt: number;
+  lastActivity: number;
+}
+
+// Wavelength avatars (wave/frequency themed)
+export const WAVELENGTH_AVATARS = [
+  '📻', '📡', '🎚️', '🎛️', '📶', '〰️', '🌊', '⚡',
+  '🔊', '🎵', '🎶', '🔉', '📢', '🎤', '🎧', '💫'
+];
+
+export const WAVELENGTH_CONFIG = {
+  minPlayers: 4,
+  maxPlayers: 12,
+  minPlayersPerTeam: 2,
+  targetScore: 10,
+  // Scoring zones (center = target position)
+  bullseyeRange: 5,    // ±5 = 4 points
+  closeRange: 10,      // ±10 = 3 points
+  okRange: 15,         // ±15 = 2 points
+};
+
+// ============================================
+// ASESINATO EN HONG KONG GAME TYPES
+// (Deception: Murder in Hong Kong clone)
+// ============================================
+
+export type AsesinatoRole = 'forensicScientist' | 'murderer' | 'accomplice' | 'witness' | 'investigator';
+export type AsesinatoPhase = 'lobby' | 'roleReveal' | 'murderSelection' | 'clueGiving' | 'discussion' | 'finished';
+
+export interface AsesinatoClueCard {
+  id: string;
+  name: string;           // e.g., "Cuchillo", "Veneno", "Cuerda"
+  category: string;       // e.g., "Arma", "Objeto", "Sustancia"
+}
+
+export interface AsesinatoMeansCard {
+  id: string;
+  name: string;           // e.g., "Apuñalado", "Envenenado", "Estrangulado"
+  category: string;       // e.g., "Violento", "Silencioso", "Accidental"
+}
+
+export interface AsesinatoSceneTile {
+  id: string;
+  title: string;          // e.g., "Ubicación del Crimen"
+  options: string[];      // e.g., ["Dormitorio", "Cocina", "Jardín", "Baño", "Garaje", "Sótano"]
+  selectedOption: number | null;  // Index of selected option (0-5)
+  isLocked: boolean;      // Can't change after round ends
+}
+
+export interface AsesinatoPlayer {
+  id: string;
+  name: string;
+  deviceId?: string;
+  avatar: string;
+  role: AsesinatoRole | null;
+  clueCards: AsesinatoClueCard[];     // 4 cards
+  meansCards: AsesinatoMeansCard[];   // 4 cards
+  hasAccused: boolean;                // Used their one accusation?
+  isHost: boolean;
+}
+
+export interface AsesinatoAccusation {
+  accuserId: string;
+  accuserName: string;
+  targetPlayerId: string;          // Whose cards they're accusing
+  targetPlayerName: string;
+  clueCardId: string;              // Which clue card
+  clueCardName: string;
+  meansCardId: string;             // Which means card
+  meansCardName: string;
+  isCorrect: boolean;
+  timestamp: number;
+}
+
+export interface AsesinatoSolution {
+  murdererPlayerId: string;
+  keyEvidenceId: string;           // The chosen clue card ID
+  meansOfMurderId: string;         // The chosen means card ID
+}
+
+export interface AsesinatoRound {
+  roundNumber: number;             // 1, 2, or 3
+  sceneTilesRevealed: string[];    // IDs of tiles revealed this round
+  replacedTileId: string | null;   // ID of tile replaced this round (rounds 2-3)
+  accusations: AsesinatoAccusation[];
+  startedAt: number;
+  endedAt: number | null;
+}
+
+export interface AsesinatoGameState {
+  roomCode: string;
+  phase: AsesinatoPhase;
+  players: AsesinatoPlayer[];
+
+  // Solution (hidden from most players)
+  solution: AsesinatoSolution | null;
+
+  // Scene tiles (Forensic Scientist's communication tool)
+  sceneTiles: AsesinatoSceneTile[];
+  causeOfDeathTile: AsesinatoSceneTile | null;     // Special tile always shown
+  locationTile: AsesinatoSceneTile | null;         // Special tile always shown
+
+  // All scene tile options (for replacement)
+  availableSceneTiles: AsesinatoSceneTile[];
+
+  // Round tracking
+  currentRound: number;
+  maxRounds: number;                               // Always 3
+  rounds: AsesinatoRound[];
+
+  // Discussion timer (3 minutes, auto-advances)
+  discussionDeadline: number | null;               // Unix timestamp
+  discussionDuration: number;                      // Fixed 180000ms = 3 min
+
+  // Clue giving state
+  forensicReady: boolean;                          // FS has finished placing clues this round
+
+  // Game result
+  winner: 'investigators' | 'murderer' | null;
+  winReason: string | null;
+  allAccusations: AsesinatoAccusation[];          // All accusations made during game
+
+  // Timestamps
+  createdAt: number;
+  lastActivity: number;
+}
+
+// Configuration
+export const ASESINATO_CONFIG = {
+  minPlayers: 4,
+  maxPlayers: 12,
+  clueCardsPerPlayer: 4,
+  meansCardsPerPlayer: 4,
+  maxRounds: 3,
+  discussionDuration: 180000,     // 3 minutes (fixed, auto-advances)
+  sceneTilesPerRound: [4, 1, 1],  // Round 1: 4 tiles, Round 2-3: 1 replacement each
+  // Role distribution (with Accomplice @ 6+, Witness @ 7+)
+  roles: {
+    4: { forensicScientist: 1, murderer: 1, accomplice: 0, witness: 0, investigator: 2 },
+    5: { forensicScientist: 1, murderer: 1, accomplice: 0, witness: 0, investigator: 3 },
+    6: { forensicScientist: 1, murderer: 1, accomplice: 1, witness: 0, investigator: 3 },
+    7: { forensicScientist: 1, murderer: 1, accomplice: 1, witness: 1, investigator: 3 },
+    8: { forensicScientist: 1, murderer: 1, accomplice: 1, witness: 1, investigator: 4 },
+    9: { forensicScientist: 1, murderer: 1, accomplice: 1, witness: 1, investigator: 5 },
+    10: { forensicScientist: 1, murderer: 1, accomplice: 1, witness: 1, investigator: 6 },
+    11: { forensicScientist: 1, murderer: 1, accomplice: 1, witness: 1, investigator: 7 },
+    12: { forensicScientist: 1, murderer: 1, accomplice: 1, witness: 1, investigator: 8 },
+  } as Record<number, { forensicScientist: number; murderer: number; accomplice: number; witness: number; investigator: number }>
+};
+
+// Avatars (detective/mystery themed)
+export const ASESINATO_AVATARS = [
+  '🕵️', '🔍', '🔎', '🔬', '🧪', '💉', '🔪', '🗡️',
+  '💀', '🦴', '🩸', '🧬', '📋', '🔦', '🕯️', '⚰️'
+];
+
 export default {};
