@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useHipster } from '@/hooks/useHipster';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { RoomShareSection } from '@/components/shared/RoomShareSection';
 
 // Music-themed animated background
 function MusicBackground() {
@@ -98,9 +99,10 @@ function MusicBackground() {
 export default function HipsterHome() {
   const router = useRouter();
   const { createGame, joinGame, loading, error } = useHipster();
-  const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [mode, setMode] = useState<'menu' | 'create' | 'join' | 'created'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [createdRoomCode, setCreatedRoomCode] = useState('');
 
   const handleCreate = async () => {
     if (!playerName.trim()) return;
@@ -108,9 +110,14 @@ export default function HipsterHome() {
     if (success) {
       const stored = sessionStorage.getItem('hipsterRoomCode');
       if (stored) {
-        router.push(`/hipster/sala/${stored}`);
+        setCreatedRoomCode(stored);
+        setMode('created');
       }
     }
+  };
+
+  const handleContinueToRoom = () => {
+    router.push(`/hipster/sala/${createdRoomCode}`);
   };
 
   const handleJoin = async () => {
@@ -380,6 +387,17 @@ export default function HipsterHome() {
                 )}
               </motion.button>
             </div>
+          )}
+
+          {mode === 'created' && (
+            <RoomShareSection
+              roomCode={createdRoomCode}
+              gameSlug="hipster"
+              accentColor="purple"
+              playerName={playerName}
+              onBack={() => setMode('menu')}
+              onContinue={handleContinueToRoom}
+            />
           )}
         </motion.div>
       </motion.div>

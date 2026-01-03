@@ -6,12 +6,14 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { TOTAL_CLUE_CARDS, TOTAL_MEANS_CARDS, TOTAL_SCENE_TILES } from '@/data/asesinatoCards';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { RoomShareSection } from '@/components/shared/RoomShareSection';
 
 export default function AsesinatoHome() {
   const router = useRouter();
-  const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
+  const [mode, setMode] = useState<'home' | 'create' | 'join' | 'created'>('home');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [createdRoomCode, setCreatedRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,7 +37,8 @@ export default function AsesinatoHome() {
       if (data.success) {
         sessionStorage.setItem('asesinatoPlayerId', data.data.playerId);
         sessionStorage.setItem('asesinatoPlayerName', name.trim());
-        router.push(`/asesinato-hk/sala/${data.data.game.roomCode}`);
+        setCreatedRoomCode(data.data.game.roomCode);
+        setMode('created');
       } else {
         setError(data.error);
       }
@@ -44,6 +47,10 @@ export default function AsesinatoHome() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleContinueToRoom = () => {
+    router.push(`/asesinato-hk/sala/${createdRoomCode}`);
   };
 
   const handleJoin = async () => {
@@ -307,6 +314,17 @@ export default function AsesinatoHome() {
                 )}
               </button>
             </div>
+          )}
+
+          {mode === 'created' && (
+            <RoomShareSection
+              roomCode={createdRoomCode}
+              gameSlug="asesinato-hk"
+              accentColor="slate"
+              playerName={name}
+              onBack={() => setMode('home')}
+              onContinue={handleContinueToRoom}
+            />
           )}
         </motion.div>
 

@@ -7,12 +7,14 @@ import { motion } from 'framer-motion';
 import { TOTAL_WORD_PAIRS } from '@/data/impostorWords';
 import { RulesModal, RulesButton } from '@/components/impostor';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { RoomShareSection } from '@/components/shared/RoomShareSection';
 
 export default function ImpostorHome() {
   const router = useRouter();
-  const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
+  const [mode, setMode] = useState<'home' | 'create' | 'join' | 'created'>('home');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [createdRoomCode, setCreatedRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showRules, setShowRules] = useState(false);
@@ -37,7 +39,8 @@ export default function ImpostorHome() {
       if (data.success) {
         sessionStorage.setItem('impostorPlayerId', data.data.playerId);
         sessionStorage.setItem('impostorPlayerName', name.trim());
-        router.push(`/impostor/sala/${data.data.game.roomCode}`);
+        setCreatedRoomCode(data.data.game.roomCode);
+        setMode('created');
       } else {
         setError(data.error);
       }
@@ -46,6 +49,10 @@ export default function ImpostorHome() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleContinueToRoom = () => {
+    router.push(`/impostor/sala/${createdRoomCode}`);
   };
 
   const handleJoin = async () => {
@@ -306,6 +313,17 @@ export default function ImpostorHome() {
                 )}
               </button>
             </div>
+          )}
+
+          {mode === 'created' && (
+            <RoomShareSection
+              roomCode={createdRoomCode}
+              gameSlug="impostor"
+              accentColor="red"
+              playerName={name}
+              onBack={() => setMode('home')}
+              onContinue={handleContinueToRoom}
+            />
           )}
         </motion.div>
 

@@ -8,12 +8,14 @@ import { TOTAL_WORDS } from '@/data/words';
 import { RulesModal, RulesButton } from '@/components/codigo-secreto';
 import { SpyBackground } from '@/components/themes';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { RoomShareSection } from '@/components/shared/RoomShareSection';
 
 export default function CodigoSecretoHome() {
   const router = useRouter();
-  const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
+  const [mode, setMode] = useState<'home' | 'create' | 'join' | 'created'>('home');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [createdRoomCode, setCreatedRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showRules, setShowRules] = useState(false);
@@ -38,7 +40,8 @@ export default function CodigoSecretoHome() {
       if (data.success) {
         sessionStorage.setItem('playerId', data.data.playerId);
         sessionStorage.setItem('playerName', name.trim());
-        router.push(`/codigo-secreto/sala/${data.data.game.roomCode}`);
+        setCreatedRoomCode(data.data.game.roomCode);
+        setMode('created');
       } else {
         setError(data.error);
       }
@@ -47,6 +50,10 @@ export default function CodigoSecretoHome() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleContinueToRoom = () => {
+    router.push(`/codigo-secreto/sala/${createdRoomCode}`);
   };
 
   const handleJoin = async () => {
@@ -365,6 +372,17 @@ export default function CodigoSecretoHome() {
                 )}
               </motion.button>
             </div>
+          )}
+
+          {mode === 'created' && (
+            <RoomShareSection
+              roomCode={createdRoomCode}
+              gameSlug="codigo-secreto"
+              accentColor="amber"
+              playerName={name}
+              onBack={() => setMode('home')}
+              onContinue={handleContinueToRoom}
+            />
           )}
         </motion.div>
 

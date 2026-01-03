@@ -8,13 +8,15 @@ import { useTheMind } from '@/hooks/useTheMind';
 import { RulesModal, HelpButton } from '@/components/the-mind';
 import { TelepathyBackground } from '@/components/themes';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { RoomShareSection } from '@/components/shared/RoomShareSection';
 
 export default function TheMindHome() {
   const router = useRouter();
   const { createGame, joinGame, loading, error } = useTheMind();
-  const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [mode, setMode] = useState<'menu' | 'create' | 'join' | 'created'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [createdRoomCode, setCreatedRoomCode] = useState('');
   const [showRules, setShowRules] = useState(false);
 
   const handleCreate = async () => {
@@ -23,9 +25,14 @@ export default function TheMindHome() {
     if (success) {
       const stored = sessionStorage.getItem('theMindRoomCode');
       if (stored) {
-        router.push(`/the-mind/sala/${stored}`);
+        setCreatedRoomCode(stored);
+        setMode('created');
       }
     }
+  };
+
+  const handleContinueToRoom = () => {
+    router.push(`/the-mind/sala/${createdRoomCode}`);
   };
 
   const handleJoin = async () => {
@@ -288,6 +295,17 @@ export default function TheMindHome() {
                 )}
               </motion.button>
             </div>
+          )}
+
+          {mode === 'created' && (
+            <RoomShareSection
+              roomCode={createdRoomCode}
+              gameSlug="the-mind"
+              accentColor="sky"
+              playerName={playerName}
+              onBack={() => setMode('menu')}
+              onContinue={handleContinueToRoom}
+            />
           )}
         </motion.div>
       </motion.div>

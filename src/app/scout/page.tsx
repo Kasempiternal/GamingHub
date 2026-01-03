@@ -8,13 +8,15 @@ import { useScout } from '@/hooks/useScout';
 import { RulesModal, HelpButton } from '@/components/scout';
 import { CircusBackground } from '@/components/themes';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { RoomShareSection } from '@/components/shared/RoomShareSection';
 
 export default function ScoutHome() {
   const router = useRouter();
   const { createGame, joinGame, loading, error } = useScout();
-  const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [mode, setMode] = useState<'menu' | 'create' | 'join' | 'created'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [createdRoomCode, setCreatedRoomCode] = useState('');
   const [showRules, setShowRules] = useState(false);
 
   const handleCreate = async () => {
@@ -23,9 +25,14 @@ export default function ScoutHome() {
     if (success) {
       const stored = sessionStorage.getItem('scoutRoomCode');
       if (stored) {
-        router.push(`/scout/sala/${stored}`);
+        setCreatedRoomCode(stored);
+        setMode('created');
       }
     }
+  };
+
+  const handleContinueToRoom = () => {
+    router.push(`/scout/sala/${createdRoomCode}`);
   };
 
   const handleJoin = async () => {
@@ -284,6 +291,17 @@ export default function ScoutHome() {
                 )}
               </motion.button>
             </div>
+          )}
+
+          {mode === 'created' && (
+            <RoomShareSection
+              roomCode={createdRoomCode}
+              gameSlug="scout"
+              accentColor="amber"
+              playerName={playerName}
+              onBack={() => setMode('menu')}
+              onContinue={handleContinueToRoom}
+            />
           )}
         </motion.div>
       </motion.div>
