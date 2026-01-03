@@ -496,7 +496,14 @@ export default function HipsterRoom() {
   const [interceptPosition, setInterceptPosition] = useState<number | null>(null);
   const [showInterceptUI, setShowInterceptUI] = useState(false);
   const [interceptCountdown, setInterceptCountdown] = useState<number>(0);
+  const interceptRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to intercept UI when phase starts
+  useEffect(() => {
+    if (game?.currentTurn?.phase === 'intercepting' && interceptRef.current) {
+      interceptRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [game?.currentTurn?.phase]);
 
   // Rejoin game if not connected
   useEffect(() => {
@@ -906,7 +913,21 @@ export default function HipsterRoom() {
             const isInterceptor = game.currentTurn.interceptingPlayerId === playerId;
 
             return (
-              <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-yellow-500/30 space-y-4">
+              <motion.div
+                ref={interceptRef}
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  scale: 1,
+                  boxShadow: ['0 0 0px rgba(234, 179, 8, 0)', '0 0 30px rgba(234, 179, 8, 0.5)', '0 0 15px rgba(234, 179, 8, 0.3)']
+                }}
+                transition={{
+                  duration: 0.5,
+                  boxShadow: { duration: 1.5, repeat: Infinity, repeatType: 'reverse' }
+                }}
+                className="bg-slate-900/90 backdrop-blur-lg rounded-xl p-4 border-2 border-yellow-400 space-y-4 shadow-lg shadow-yellow-500/20"
+              >
                 {/* Header with phase indicator and countdown */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1034,7 +1055,7 @@ export default function HipsterRoom() {
                     </p>
                   </div>
                 )}
-              </div>
+              </motion.div>
             );
           })()}
 
