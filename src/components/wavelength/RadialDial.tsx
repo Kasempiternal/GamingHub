@@ -88,6 +88,7 @@ export function RadialDial({
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!interactive) return;
+    e.preventDefault(); // Prevent page scrolling
     setIsDragging(true);
     const touch = e.touches[0];
     handleInteraction(touch.clientX, touch.clientY);
@@ -95,6 +96,7 @@ export function RadialDial({
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
     if (!isDragging) return;
+    e.preventDefault(); // Prevent page scrolling
     const touch = e.touches[0];
     handleInteraction(touch.clientX, touch.clientY);
   }, [isDragging, handleInteraction]);
@@ -104,8 +106,9 @@ export function RadialDial({
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleTouchMove);
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
       window.addEventListener('touchend', handleMouseUp);
+      window.addEventListener('touchcancel', handleMouseUp);
     }
 
     return () => {
@@ -113,6 +116,7 @@ export function RadialDial({
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleMouseUp);
+      window.removeEventListener('touchcancel', handleMouseUp);
     };
   }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove]);
 
@@ -160,6 +164,7 @@ export function RadialDial({
         height={size / 2 + 40}
         viewBox={`0 0 ${size} ${size / 2 + 40}`}
         className={`select-none ${interactive ? 'cursor-pointer' : ''}`}
+        style={{ touchAction: interactive ? 'none' : 'auto' }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
@@ -251,32 +256,36 @@ export function RadialDial({
           );
         })}
 
-        {/* Guess indicator */}
-        <motion.g
-          animate={{ rotate: guessAngle }}
-          transition={{ type: 'spring', stiffness: 100, damping: 15 }}
-          style={{ transformOrigin: `${center}px ${center}px` }}
-        >
-          {/* Dial hand */}
-          <line
-            x1={center}
-            y1={center}
-            x2={center}
-            y2={center - radius + 10}
-            stroke="#ffffff"
-            strokeWidth={4}
-            strokeLinecap="round"
-          />
-          {/* Hand tip */}
-          <circle
-            cx={center}
-            cy={center - radius + 10}
-            r={8}
-            fill="#06b6d4"
-            stroke="#ffffff"
-            strokeWidth={2}
-          />
-        </motion.g>
+        {/* Guess indicator - calculate position mathematically for reliability */}
+        {(() => {
+          const angleRad = (guessAngle - 90) * (Math.PI / 180);
+          const handLength = radius - 10;
+          const handEndX = center + handLength * Math.cos(angleRad);
+          const handEndY = center + handLength * Math.sin(angleRad);
+          return (
+            <>
+              {/* Dial hand */}
+              <motion.line
+                x1={center}
+                y1={center}
+                animate={{ x2: handEndX, y2: handEndY }}
+                transition={{ type: 'spring', stiffness: 100, damping: 15 }}
+                stroke="#ffffff"
+                strokeWidth={4}
+                strokeLinecap="round"
+              />
+              {/* Hand tip */}
+              <motion.circle
+                animate={{ cx: handEndX, cy: handEndY }}
+                transition={{ type: 'spring', stiffness: 100, damping: 15 }}
+                r={8}
+                fill="#06b6d4"
+                stroke="#ffffff"
+                strokeWidth={2}
+              />
+            </>
+          );
+        })()}
 
         {/* Center pivot */}
         <circle
