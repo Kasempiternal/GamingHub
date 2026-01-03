@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'create': {
-        const { hostName } = body;
+        const { hostName, deviceId } = body;
         if (!hostName || hostName.trim().length < 2) {
           return NextResponse.json(
             { success: false, error: 'Nombre invalido' },
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        const game = createGame(hostName.trim());
+        const game = createGame(hostName.trim(), deviceId);
         await impostorStore.set(game.roomCode, game);
 
         return NextResponse.json({
@@ -43,10 +43,10 @@ export async function POST(request: NextRequest) {
       }
 
       case 'join': {
-        const { roomCode, playerName } = body;
-        if (!roomCode || !playerName) {
+        const { roomCode, playerName, deviceId } = body;
+        if (!roomCode) {
           return NextResponse.json(
-            { success: false, error: 'Faltan datos' },
+            { success: false, error: 'Falta codigo de sala' },
             { status: 400 }
           );
         }
@@ -59,19 +59,46 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Check if player already exists
-        const existingPlayer = game.players.find(
-          p => p.name.toLowerCase() === playerName.toLowerCase().trim()
-        );
+        // Check if device already has a player in this game (auto-reconnect)
+        if (deviceId) {
+          const existingByDevice = game.players.find(p => p.deviceId === deviceId);
+          if (existingByDevice) {
+            game.lastActivity = Date.now();
+            await impostorStore.set(roomCode.toUpperCase(), game);
+            return NextResponse.json({
+              success: true,
+              data: {
+                game: sanitizeGameForPlayer(game, existingByDevice.id),
+                playerId: existingByDevice.id,
+                reconnected: true,
+              },
+            });
+          }
+        }
 
-        if (existingPlayer) {
-          return NextResponse.json({
-            success: true,
-            data: {
-              game: sanitizeGameForPlayer(game, existingPlayer.id),
-              playerId: existingPlayer.id,
-            },
-          });
+        // Check if player already exists by name (legacy reconnect)
+        if (playerName) {
+          const existingPlayer = game.players.find(
+            p => p.name.toLowerCase() === playerName.toLowerCase().trim()
+          );
+
+          if (existingPlayer) {
+            return NextResponse.json({
+              success: true,
+              data: {
+                game: sanitizeGameForPlayer(game, existingPlayer.id),
+                playerId: existingPlayer.id,
+              },
+            });
+          }
+        }
+
+        // New player joining - require name
+        if (!playerName) {
+          return NextResponse.json(
+            { success: false, error: 'Nombre requerido' },
+            { status: 400 }
+          );
         }
 
         if (game.phase !== 'lobby') {
@@ -88,7 +115,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        const { game: updatedGame, player } = addPlayer(game, playerName.trim());
+        const { game: updatedGame, player } = addPlayer(game, playerName.trim(), deviceId);
         await impostorStore.set(roomCode.toUpperCase(), updatedGame);
 
         return NextResponse.json({

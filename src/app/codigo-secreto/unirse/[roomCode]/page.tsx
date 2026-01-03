@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { SpyBackground } from '@/components/themes';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { getDeviceId } from '@/lib/deviceId';
 
 export default function UnirsePartida() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function UnirsePartida() {
   const [gameExists, setGameExists] = useState(false);
 
   useEffect(() => {
-    const checkGame = async () => {
+    const checkGameAndAutoReconnect = async () => {
       try {
         const response = await fetch('/api/codigo-secreto', {
           method: 'POST',
@@ -27,7 +28,37 @@ export default function UnirsePartida() {
           body: JSON.stringify({ action: 'get', roomCode }),
         });
         const data = await response.json();
-        setGameExists(data.success);
+
+        if (!data.success) {
+          setGameExists(false);
+          setChecking(false);
+          return;
+        }
+
+        setGameExists(true);
+
+        // Attempt auto-reconnect with deviceId
+        const deviceId = getDeviceId();
+        if (deviceId) {
+          const reconnectResponse = await fetch('/api/codigo-secreto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'join',
+              roomCode: roomCode.toUpperCase(),
+              deviceId,
+              playerName: '', // Empty name for reconnect attempt
+            }),
+          });
+          const reconnectData = await reconnectResponse.json();
+
+          if (reconnectData.success && reconnectData.data?.reconnected) {
+            // Successfully reconnected to existing player
+            sessionStorage.setItem('playerId', reconnectData.data.playerId);
+            router.push(`/codigo-secreto/sala/${roomCode.toUpperCase()}`);
+            return;
+          }
+        }
       } catch {
         setGameExists(false);
       } finally {
@@ -35,8 +66,8 @@ export default function UnirsePartida() {
       }
     };
 
-    checkGame();
-  }, [roomCode]);
+    checkGameAndAutoReconnect();
+  }, [roomCode, router]);
 
   const handleJoin = async () => {
     if (name.trim().length < 2) {
@@ -48,6 +79,7 @@ export default function UnirsePartida() {
     setError('');
 
     try {
+      const deviceId = getDeviceId();
       const response = await fetch('/api/codigo-secreto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -55,6 +87,7 @@ export default function UnirsePartida() {
           action: 'join',
           roomCode: roomCode.toUpperCase(),
           playerName: name.trim(),
+          deviceId,
         }),
       });
       const data = await response.json();

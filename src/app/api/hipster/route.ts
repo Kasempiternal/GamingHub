@@ -120,7 +120,13 @@ function getRandomAvatar(usedAvatars: string[]): string {
 const FILTERED_TRACK_KEYWORDS = [
   'live', 'remix', 'acoustic', 'remaster', 'remastered',
   'radio edit', 'extended', 'demo', 'cover', 'tribute',
-  'karaoke', 'instrumental', 'reprise', 'unplugged', 'session'
+  'karaoke', 'instrumental', 'reprise', 'unplugged', 'session',
+  // Additional filters:
+  'version', 'edit', 'mix',           // Common variations
+  'en vivo', 'directo',               // Spanish live versions
+  'bonus', 'deluxe',                  // Album variants
+  'stripped', 'alternative',          // Other variants
+  'sped up', 'slowed',                // Speed variants (TikTok)
 ];
 
 function isOriginalTrack(trackName: string): boolean {
@@ -214,42 +220,72 @@ async function injectRandomSongs(
 }
 
 // Check if timeline position guess is correct
+// selectionType: 'slot' = clicked between years (strict: no same-year allowed)
+//                'year' = clicked on a year group (lenient: same-year allowed)
 function checkGuessCorrect(
   timeline: HipsterTimelineCard[],
   newSong: HipsterSong,
-  guessedPosition: number
+  guessedPosition: number,
+  selectionType: 'slot' | 'year' = 'slot'
 ): boolean {
   if (timeline.length === 0) {
     return true; // First card is always correct
   }
 
-  // Create a copy of timeline with the new song at guessed position
-  const testTimeline = [...timeline];
+  // Sort timeline by year to match UI display order (defensive measure)
+  const sortedTimeline = [...timeline].sort((a, b) => a.song.releaseYear - b.song.releaseYear);
+
   const newCard: HipsterTimelineCard = {
     song: newSong,
     position: guessedPosition,
     placedAt: Date.now(),
   };
 
-  // Insert at position
+  // Insert at position in the sorted timeline
+  const testTimeline = [...sortedTimeline];
   testTimeline.splice(guessedPosition, 0, newCard);
 
-  // Check if timeline is in chronological order (non-decreasing)
-  // Uses > not >= so same-year songs ARE allowed (multiple valid positions)
+  // Check if timeline is in chronological order
   for (let i = 0; i < testTimeline.length - 1; i++) {
-    if (testTimeline[i].song.releaseYear > testTimeline[i + 1].song.releaseYear) {
-      return false;
+    const current = testTimeline[i].song.releaseYear;
+    const next = testTimeline[i + 1].song.releaseYear;
+
+    if (selectionType === 'slot') {
+      // Slot: Strict ordering required (must be strictly between years)
+      // Song 2005 placed in slot between 1998 and 2005 is WRONG (2005 >= 2005)
+      if (current >= next) return false;
+    } else {
+      // Year: Same-year allowed (clicking on a year group means "same year")
+      if (current > next) return false;
     }
   }
 
   return true;
 }
 
+// Find the correct chronological position for a song in a timeline
+function findChronologicalPosition(timeline: HipsterTimelineCard[], year: number): number {
+  // Sort timeline first to ensure chronological order
+  const sortedTimeline = [...timeline].sort((a, b) => a.song.releaseYear - b.song.releaseYear);
+
+  // Find first position where the year fits chronologically
+  for (let i = 0; i < sortedTimeline.length; i++) {
+    if (year <= sortedTimeline[i].song.releaseYear) {
+      return i;
+    }
+  }
+  return sortedTimeline.length; // Insert at end
+}
+
 // Fuzzy match for bonus guess (case insensitive, allows minor typos)
 function fuzzyMatch(guess: string, actual: string): boolean {
   const normalizeStr = (s: string) =>
     s.toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\(.*?\)/g, '')                           // Remove everything in parentheses
+      .replace(/\[.*?\]/g, '')                           // Remove everything in brackets
+      .replace(/\s*[-–—]\s*(feat|ft|featuring)\.?\s*.*/gi, '') // Remove "- feat X" patterns
+      .replace(/\s*(feat|ft|featuring)\.?\s*.*/gi, '')   // Remove "feat X" at any position
+      .replace(/[^a-z0-9\s]/g, '')                       // Remove remaining special chars
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -323,9 +359,9 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'create':
-        return handleCreate(data.playerName, data.avatar);
+        return handleCreate(data.playerName, data.avatar, data.deviceId);
       case 'join':
-        return handleJoin(roomCode || data.roomCode, data.playerName, data.avatar);
+        return handleJoin(roomCode || data.roomCode, data.playerName, data.avatar, data.deviceId);
       case 'rejoin':
         return handleRejoin(roomCode, playerId);
       case 'musicReady':
@@ -341,7 +377,7 @@ export async function POST(request: NextRequest) {
       case 'startGame':
         return handleStartGame(roomCode, playerId);
       case 'submitGuess':
-        return handleSubmitGuess(roomCode, playerId, data.position);
+        return handleSubmitGuess(roomCode, playerId, data.position, data.type);
       case 'submitBonus':
         return handleSubmitBonus(roomCode, playerId, data.artist, data.title);
       case 'skipBonus':
@@ -362,6 +398,8 @@ export async function POST(request: NextRequest) {
         return handleSkipTurn(roomCode, playerId);
       case 'reset':
         return handleReset(roomCode, playerId);
+      case 'removePlayer':
+        return handleRemovePlayer(roomCode, playerId, data.targetPlayerId);
       default:
         return error('Acción no válida');
     }
@@ -373,7 +411,7 @@ export async function POST(request: NextRequest) {
 
 // Action handlers
 
-async function handleCreate(playerName: string, avatar?: string) {
+async function handleCreate(playerName: string, avatar?: string, deviceId?: string) {
   if (!playerName?.trim()) {
     return error('Nombre requerido');
   }
@@ -399,6 +437,7 @@ async function handleCreate(playerName: string, avatar?: string) {
     contributedSongs: [],
     isReady: false,
     songsAdded: 0,
+    deviceId,
   };
 
   const game: HipsterGameState = {
@@ -423,14 +462,34 @@ async function handleCreate(playerName: string, avatar?: string) {
   return success({ playerId, game });
 }
 
-async function handleJoin(roomCode: string, playerName: string, avatar?: string) {
-  if (!roomCode?.trim() || !playerName?.trim()) {
-    return error('Código de sala y nombre requeridos');
+async function handleJoin(roomCode: string, playerName: string, avatar?: string, deviceId?: string) {
+  if (!roomCode?.trim()) {
+    return error('Código de sala requerido');
   }
 
   const game = await getGame(roomCode.toUpperCase());
   if (!game) {
     return error('Sala no encontrada');
+  }
+
+  // Check if device already has a player in this game (auto-reconnect)
+  if (deviceId) {
+    const existingByDevice = game.players.find(p => p.deviceId === deviceId);
+    if (existingByDevice) {
+      // Update last activity and return existing player
+      game.lastActivity = Date.now();
+      await setGame(game.roomCode, game);
+      return success({
+        playerId: existingByDevice.id,
+        game,
+        reconnected: true,
+      });
+    }
+  }
+
+  // New player joining - require name
+  if (!playerName?.trim()) {
+    return error('Nombre requerido');
   }
 
   if (game.phase !== 'lobby' && game.phase !== 'collecting') {
@@ -454,6 +513,7 @@ async function handleJoin(roomCode: string, playerName: string, avatar?: string)
     contributedSongs: [],
     isReady: false,
     songsAdded: 0,
+    deviceId,
   };
 
   game.players.push(player);
@@ -686,7 +746,7 @@ async function handleStartGame(roomCode: string, playerId: string) {
   return success({ game });
 }
 
-async function handleSubmitGuess(roomCode: string, playerId: string, position: number) {
+async function handleSubmitGuess(roomCode: string, playerId: string, position: number, selectionType?: 'slot' | 'year') {
   const game = await getGame(roomCode);
   if (!game) return error('Sala no encontrada');
 
@@ -702,7 +762,8 @@ async function handleSubmitGuess(roomCode: string, playerId: string, position: n
   if (!player) return error('Jugador no encontrado');
 
   // Check if guess is correct immediately
-  const isCorrect = checkGuessCorrect(player.timeline, game.currentTurn.song, position);
+  // Use 'slot' as default for backwards compatibility
+  const isCorrect = checkGuessCorrect(player.timeline, game.currentTurn.song, position, selectionType || 'slot');
   game.currentTurn.guessedPosition = position;
   game.currentTurn.isCorrect = isCorrect;
   game.currentTurn.intercepts = [];
@@ -1132,12 +1193,14 @@ async function handleResolveIntercept(roomCode: string, playerId: string) {
     // Interceptor wins! Add card to interceptor's timeline
     const interceptPlayer = game.players.find(p => p.id === winningInterceptor!.playerId);
     if (interceptPlayer) {
+      // Calculate correct position for INTERCEPTOR's timeline (not current player's)
+      const insertPosition = findChronologicalPosition(interceptPlayer.timeline, song.releaseYear);
       const newCard: HipsterTimelineCard = {
         song,
-        position: winningInterceptor.position,
+        position: insertPosition,
         placedAt: Date.now(),
       };
-      interceptPlayer.timeline.splice(winningInterceptor.position, 0, newCard);
+      interceptPlayer.timeline.splice(insertPosition, 0, newCard);
       interceptPlayer.timeline.forEach((card, idx) => { card.position = idx; });
 
       game.currentTurn.interceptWinner = winningInterceptor.playerId;
@@ -1279,6 +1342,37 @@ async function handleReset(roomCode: string, playerId: string) {
   }
 
   game.lastActivity = Date.now();
+  await setGame(game.roomCode, game);
+
+  return success({ game });
+}
+
+async function handleRemovePlayer(roomCode: string, playerId: string, targetPlayerId: string) {
+  const game = await getGame(roomCode);
+  if (!game) return error('Sala no encontrada');
+
+  const player = game.players.find(p => p.id === playerId);
+  if (!player?.isHost) {
+    return error('Solo el anfitrión puede eliminar jugadores');
+  }
+
+  if (game.phase !== 'lobby') {
+    return error('Solo puedes eliminar jugadores en el lobby');
+  }
+
+  if (playerId === targetPlayerId) {
+    return error('No puedes eliminarte a ti mismo');
+  }
+
+  const targetIndex = game.players.findIndex(p => p.id === targetPlayerId);
+  if (targetIndex === -1) {
+    return error('Jugador no encontrado');
+  }
+
+  // Remove the player
+  game.players.splice(targetIndex, 1);
+  game.lastActivity = Date.now();
+
   await setGame(game.roomCode, game);
 
   return success({ game });

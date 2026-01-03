@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { HipsterGameState, HipsterSong } from '@/types/game';
+import { getDeviceId } from '@/lib/deviceId';
 
 const POLL_INTERVAL = 1500; // 1.5 seconds for sync
 
@@ -14,6 +15,7 @@ interface UseHipsterResult {
   createGame: (playerName: string, avatar?: string) => Promise<boolean>;
   joinGame: (roomCode: string, playerName: string, avatar?: string) => Promise<boolean>;
   rejoinGame: (roomCode: string, playerId: string) => Promise<boolean>;
+  removePlayer: (targetPlayerId: string) => Promise<boolean>;
   // Music setup (host confirms audio is working)
   confirmMusicReady: () => Promise<boolean>;
   // Collection phase
@@ -25,7 +27,7 @@ interface UseHipsterResult {
   startGame: () => Promise<boolean>;
   startListening: () => Promise<boolean>;
   skipTurn: () => Promise<boolean>;
-  submitGuess: (position: number) => Promise<boolean>;
+  submitGuess: (position: number, type?: 'slot' | 'year') => Promise<boolean>;
   submitBonus: (artist: string, title: string) => Promise<boolean>;
   skipBonus: () => Promise<boolean>;
   useToken: (targetPlayerId: string, cardIndex: number) => Promise<boolean>;
@@ -123,11 +125,13 @@ export function useHipster(): UseHipsterResult {
 
   // Room management
   const createGame = useCallback(async (playerName: string, avatar?: string): Promise<boolean> => {
-    return apiCall('create', { playerName, avatar });
+    const deviceId = getDeviceId();
+    return apiCall('create', { playerName, avatar, deviceId });
   }, [apiCall]);
 
   const joinGame = useCallback(async (roomCode: string, playerName: string, avatar?: string): Promise<boolean> => {
-    return apiCall('join', { roomCode, playerName, avatar });
+    const deviceId = getDeviceId();
+    return apiCall('join', { roomCode, playerName, avatar, deviceId });
   }, [apiCall]);
 
   const rejoinGame = useCallback(async (roomCode: string, storedPlayerId: string): Promise<boolean> => {
@@ -162,6 +166,10 @@ export function useHipster(): UseHipsterResult {
       setLoading(false);
     }
   }, []);
+
+  const removePlayer = useCallback(async (targetPlayerId: string): Promise<boolean> => {
+    return apiCall('removePlayer', { targetPlayerId });
+  }, [apiCall]);
 
   // Music ready - host confirms audio is working
   const confirmMusicReady = useCallback(async (): Promise<boolean> => {
@@ -198,8 +206,8 @@ export function useHipster(): UseHipsterResult {
     return apiCall('skipTurn');
   }, [apiCall]);
 
-  const submitGuess = useCallback(async (position: number): Promise<boolean> => {
-    return apiCall('submitGuess', { position });
+  const submitGuess = useCallback(async (position: number, type: 'slot' | 'year' = 'slot'): Promise<boolean> => {
+    return apiCall('submitGuess', { position, type });
   }, [apiCall]);
 
   const submitBonus = useCallback(async (artist: string, title: string): Promise<boolean> => {
@@ -243,6 +251,7 @@ export function useHipster(): UseHipsterResult {
     createGame,
     joinGame,
     rejoinGame,
+    removePlayer,
     confirmMusicReady,
     startCollecting,
     addSong,

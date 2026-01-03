@@ -19,6 +19,7 @@ export interface Card {
 export interface Player {
   id: string;
   name: string;
+  deviceId?: string;
   team: Team | null;
   role: Role | null;
   isHost: boolean;
@@ -94,6 +95,7 @@ export type ImpostorPhase = 'lobby' | 'description' | 'discussion' | 'voting' | 
 export interface ImpostorPlayer {
   id: string;
   name: string;
+  deviceId?: string;
   avatar: string;
   role: ImpostorRole | null;
   word: string | null;
@@ -164,6 +166,7 @@ export type TheMindPhase = 'lobby' | 'dealing' | 'playing' | 'levelComplete' | '
 export interface TheMindPlayer {
   id: string;
   name: string;
+  deviceId?: string;
   cards: number[];
   isHost: boolean;
   isReady: boolean;
@@ -236,6 +239,7 @@ export interface ScoutCard {
 export interface ScoutPlayer {
   id: string;
   name: string;
+  deviceId?: string;
   hand: ScoutCard[];           // Cards in hand (ORDER MATTERS - cannot rearrange!)
   capturedCards: number;       // Count of cards captured from beating plays
   scoutTokensReceived: number; // Tokens received when others scout from you
@@ -360,6 +364,7 @@ export interface HipsterTimelineCard {
 export interface HipsterPlayer {
   id: string;
   name: string;
+  deviceId?: string;
   avatar: string;                // Emoji avatar
   isHost: boolean;
   timeline: HipsterTimelineCard[];  // Cards in player's timeline
@@ -472,6 +477,7 @@ export interface TimesUpCard {
 export interface TimesUpPlayer {
   id: string;
   name: string;
+  deviceId?: string;
   avatar: string;
   team: TimesUpTeam | null;
   isHost: boolean;

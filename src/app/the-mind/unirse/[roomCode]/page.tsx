@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useTheMind } from '@/hooks/useTheMind';
 import { TelepathyBackground } from '@/components/themes';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { getDeviceId } from '@/lib/deviceId';
 
 export default function JoinTheMind() {
   const params = useParams();
@@ -16,19 +17,49 @@ export default function JoinTheMind() {
   const [playerName, setPlayerName] = useState('');
   const [gameExists, setGameExists] = useState<boolean | null>(null);
 
-  // Check if game exists
+  // Check if game exists and attempt auto-reconnect
   useEffect(() => {
-    async function checkGame() {
+    async function checkGameAndAutoReconnect() {
       try {
         const response = await fetch(`/api/the-mind?roomCode=${roomCode}`);
         const data = await response.json();
-        setGameExists(data.success);
+
+        if (!data.success) {
+          setGameExists(false);
+          return;
+        }
+
+        setGameExists(true);
+
+        // Attempt auto-reconnect with deviceId
+        const deviceId = getDeviceId();
+        if (deviceId) {
+          const reconnectResponse = await fetch('/api/the-mind', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'join',
+              roomCode: roomCode.toUpperCase(),
+              deviceId,
+              playerName: '', // Empty name for reconnect attempt
+            }),
+          });
+          const reconnectData = await reconnectResponse.json();
+
+          if (reconnectData.success && reconnectData.data?.reconnected) {
+            // Successfully reconnected to existing player
+            sessionStorage.setItem('theMindPlayerId', reconnectData.data.playerId);
+            sessionStorage.setItem('theMindRoomCode', roomCode.toUpperCase());
+            router.push(`/the-mind/sala/${roomCode.toUpperCase()}`);
+            return;
+          }
+        }
       } catch {
         setGameExists(false);
       }
     }
-    checkGame();
-  }, [roomCode]);
+    checkGameAndAutoReconnect();
+  }, [roomCode, router]);
 
   const handleJoin = async () => {
     if (!playerName.trim()) return;

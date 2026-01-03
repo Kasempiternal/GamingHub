@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { getDeviceId } from '@/lib/deviceId';
 
 export default function UnirseTimesUp() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function UnirseTimesUp() {
   const [gameStarted, setGameStarted] = useState(false);
 
   useEffect(() => {
-    const checkGame = async () => {
+    const checkGameAndAutoReconnect = async () => {
       try {
         const response = await fetch('/api/times-up', {
           method: 'POST',
@@ -27,14 +28,42 @@ export default function UnirseTimesUp() {
           body: JSON.stringify({ action: 'get', roomCode }),
         });
         const data = await response.json();
-        if (data.success) {
-          setGameExists(true);
-          // Check if game has already started (phase is not 'lobby' or 'setup')
-          if (data.data.phase && data.data.phase !== 'lobby' && data.data.phase !== 'setup') {
-            setGameStarted(true);
-          }
-        } else {
+
+        if (!data.success) {
           setGameExists(false);
+          setChecking(false);
+          return;
+        }
+
+        setGameExists(true);
+
+        // Check if game has already started (phase is not 'lobby' or 'setup')
+        const gameData = data.data.game || data.data;
+        if (gameData.phase && gameData.phase !== 'lobby' && gameData.phase !== 'setup') {
+          setGameStarted(true);
+        }
+
+        // Attempt auto-reconnect with deviceId
+        const deviceId = getDeviceId();
+        if (deviceId) {
+          const reconnectResponse = await fetch('/api/times-up', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'join',
+              roomCode: roomCode.toUpperCase(),
+              deviceId,
+              playerName: '', // Empty name for reconnect attempt
+            }),
+          });
+          const reconnectData = await reconnectResponse.json();
+
+          if (reconnectData.success && reconnectData.data?.reconnected) {
+            // Successfully reconnected to existing player
+            sessionStorage.setItem('timesUpPlayerId', reconnectData.data.playerId);
+            router.push(`/times-up/sala/${roomCode.toUpperCase()}`);
+            return;
+          }
         }
       } catch {
         setGameExists(false);
@@ -43,8 +72,8 @@ export default function UnirseTimesUp() {
       }
     };
 
-    checkGame();
-  }, [roomCode]);
+    checkGameAndAutoReconnect();
+  }, [roomCode, router]);
 
   const handleJoin = async () => {
     if (name.trim().length < 2) {
@@ -56,6 +85,7 @@ export default function UnirseTimesUp() {
     setError('');
 
     try {
+      const deviceId = getDeviceId();
       const response = await fetch('/api/times-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,6 +93,7 @@ export default function UnirseTimesUp() {
           action: 'join',
           roomCode: roomCode.toUpperCase(),
           playerName: name.trim(),
+          deviceId,
         }),
       });
       const data = await response.json();

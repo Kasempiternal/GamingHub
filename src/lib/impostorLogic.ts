@@ -35,7 +35,7 @@ export function getRandomAvatar(usedAvatars: string[]): string {
 }
 
 // Create initial game state
-export function createGame(hostName: string): ImpostorGameState {
+export function createGame(hostName: string, deviceId?: string): ImpostorGameState {
   const roomCode = generateRoomCode();
   const avatar = getRandomAvatar([]);
 
@@ -52,6 +52,7 @@ export function createGame(hostName: string): ImpostorGameState {
     isEliminated: false,
     isHost: true,
     points: 0,
+    deviceId,
   };
 
   const now = Date.now();
@@ -78,7 +79,7 @@ export function createGame(hostName: string): ImpostorGameState {
 }
 
 // Add a player to the game
-export function addPlayer(game: ImpostorGameState, playerName: string): { game: ImpostorGameState; player: ImpostorPlayer } {
+export function addPlayer(game: ImpostorGameState, playerName: string, deviceId?: string): { game: ImpostorGameState; player: ImpostorPlayer } {
   const usedAvatars = game.players.map(p => p.avatar);
   const avatar = getRandomAvatar(usedAvatars);
 
@@ -95,6 +96,7 @@ export function addPlayer(game: ImpostorGameState, playerName: string): { game: 
     isEliminated: false,
     isHost: false,
     points: 0,
+    deviceId,
   };
 
   return {

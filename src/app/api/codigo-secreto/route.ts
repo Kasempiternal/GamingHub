@@ -61,12 +61,12 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'create': {
-        const { hostName } = params;
+        const { hostName, deviceId } = params;
         if (!hostName || hostName.trim().length < 2) {
           return jsonResponse({ success: false, error: 'Nombre invalido (minimo 2 caracteres)' }, 400);
         }
 
-        const game = createGame(hostName.trim());
+        const game = createGame(hostName.trim(), deviceId);
         await gameStore.set(game.roomCode, game);
 
         const hostPlayer = game.players[0];
@@ -77,9 +77,9 @@ export async function POST(request: NextRequest) {
       }
 
       case 'join': {
-        const { roomCode, playerName } = params;
-        if (!roomCode || !playerName || playerName.trim().length < 2) {
-          return jsonResponse({ success: false, error: 'Codigo de sala y nombre requeridos' }, 400);
+        const { roomCode, playerName, deviceId } = params;
+        if (!roomCode) {
+          return jsonResponse({ success: false, error: 'Codigo de sala requerido' }, 400);
         }
 
         const game = await gameStore.get(roomCode);
@@ -87,26 +87,47 @@ export async function POST(request: NextRequest) {
           return jsonResponse({ success: false, error: 'Sala no encontrada' }, 404);
         }
 
-        if (game.players.length >= 20) {
-          return jsonResponse({ success: false, error: 'Sala llena (maximo 20 jugadores)' }, 400);
+        // Check if device already has a player in this game (auto-reconnect)
+        if (deviceId) {
+          const existingByDevice = game.players.find(p => p.deviceId === deviceId);
+          if (existingByDevice) {
+            game.lastActivity = Date.now();
+            await gameStore.set(roomCode, game);
+            return jsonResponse({
+              success: true,
+              data: { game, playerId: existingByDevice.id, reconnected: true },
+            });
+          }
         }
 
-        const existingPlayer = game.players.find(
-          p => p.name.toLowerCase() === playerName.trim().toLowerCase()
-        );
+        // Check if player already exists by name (legacy reconnect)
+        if (playerName) {
+          const existingPlayer = game.players.find(
+            p => p.name.toLowerCase() === playerName.trim().toLowerCase()
+          );
 
-        if (existingPlayer) {
-          return jsonResponse({
-            success: true,
-            data: { game, playerId: existingPlayer.id, reconnected: true },
-          });
+          if (existingPlayer) {
+            return jsonResponse({
+              success: true,
+              data: { game, playerId: existingPlayer.id, reconnected: true },
+            });
+          }
+        }
+
+        // New player joining - require name
+        if (!playerName || playerName.trim().length < 2) {
+          return jsonResponse({ success: false, error: 'Nombre requerido (minimo 2 caracteres)' }, 400);
+        }
+
+        if (game.players.length >= 20) {
+          return jsonResponse({ success: false, error: 'Sala llena (maximo 20 jugadores)' }, 400);
         }
 
         if (game.phase !== 'lobby') {
           return jsonResponse({ success: false, error: 'La partida ya ha comenzado. Si eras un jugador, usa el mismo nombre para reconectarte.' }, 400);
         }
 
-        const { game: updatedGame, player } = addPlayer(game, playerName.trim());
+        const { game: updatedGame, player } = addPlayer(game, playerName.trim(), deviceId);
         await gameStore.set(roomCode, updatedGame);
 
         return jsonResponse({

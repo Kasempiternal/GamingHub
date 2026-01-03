@@ -215,7 +215,17 @@ function SongSearch({ onAddSong, addedSongs, maxSongs, addedSongIds }: {
 }
 
 // Player List Component
-function PlayerList({ players, currentPlayerId }: { players: HipsterPlayer[]; currentPlayerId: string | null }) {
+function PlayerList({
+  players,
+  currentPlayerId,
+  isHost = false,
+  onRemovePlayer
+}: {
+  players: HipsterPlayer[];
+  currentPlayerId: string | null;
+  isHost?: boolean;
+  onRemovePlayer?: (playerId: string) => void;
+}) {
   return (
     <div className="grid grid-cols-2 gap-2">
       {players.map((player) => (
@@ -236,6 +246,18 @@ function PlayerList({ players, currentPlayerId }: { players: HipsterPlayer[]; cu
               {player.isReady && <span className="text-green-400 ml-1">✓</span>}
             </p>
           </div>
+          {/* Remove button - only shown for host and non-host players */}
+          {isHost && onRemovePlayer && !player.isHost && (
+            <button
+              onClick={() => onRemovePlayer(player.id)}
+              className="p-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+              title="Eliminar jugador"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -409,6 +431,7 @@ export default function HipsterRoom() {
     resolveIntercept,
     nextTurn,
     resetGame,
+    removePlayer,
   } = useHipster();
 
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -598,7 +621,12 @@ export default function HipsterRoom() {
             <h3 className="text-purple-300 text-sm font-medium mb-3 uppercase tracking-wider">
               Jugadores ({game.players.length}/{HIPSTER_CONFIG.maxPlayers})
             </h3>
-            <PlayerList players={game.players} currentPlayerId={playerId} />
+            <PlayerList
+              players={game.players}
+              currentPlayerId={playerId}
+              isHost={isHost}
+              onRemovePlayer={removePlayer}
+            />
           </div>
 
           {/* Music Setup (Host only) */}
@@ -922,7 +950,7 @@ export default function HipsterRoom() {
               whileTap={{ scale: 0.98 }}
               onClick={() => {
                 setIsAudioPlaying(false);
-                submitGuess(selectedPosition);
+                submitGuess(selectedPosition, selectedType || 'slot');
                 setSelectedPosition(null);
                 setSelectedType(null);
               }}

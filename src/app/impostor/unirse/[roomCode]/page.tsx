@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { NavigationMenu } from '@/components/shared/NavigationMenu';
+import { getDeviceId } from '@/lib/deviceId';
 
 export default function UnirseImpostor() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function UnirseImpostor() {
   const [gameExists, setGameExists] = useState(false);
 
   useEffect(() => {
-    const checkGame = async () => {
+    const checkGameAndAutoReconnect = async () => {
       try {
         const response = await fetch('/api/impostor', {
           method: 'POST',
@@ -26,7 +27,37 @@ export default function UnirseImpostor() {
           body: JSON.stringify({ action: 'get', roomCode }),
         });
         const data = await response.json();
-        setGameExists(data.success);
+
+        if (!data.success) {
+          setGameExists(false);
+          setChecking(false);
+          return;
+        }
+
+        setGameExists(true);
+
+        // Attempt auto-reconnect with deviceId
+        const deviceId = getDeviceId();
+        if (deviceId) {
+          const reconnectResponse = await fetch('/api/impostor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'join',
+              roomCode: roomCode.toUpperCase(),
+              deviceId,
+              playerName: '', // Empty name for reconnect attempt
+            }),
+          });
+          const reconnectData = await reconnectResponse.json();
+
+          if (reconnectData.success && reconnectData.data?.reconnected) {
+            // Successfully reconnected to existing player
+            sessionStorage.setItem('impostorPlayerId', reconnectData.data.playerId);
+            router.push(`/impostor/sala/${roomCode.toUpperCase()}`);
+            return;
+          }
+        }
       } catch {
         setGameExists(false);
       } finally {
@@ -34,8 +65,8 @@ export default function UnirseImpostor() {
       }
     };
 
-    checkGame();
-  }, [roomCode]);
+    checkGameAndAutoReconnect();
+  }, [roomCode, router]);
 
   const handleJoin = async () => {
     if (name.trim().length < 2) {
@@ -47,6 +78,7 @@ export default function UnirseImpostor() {
     setError('');
 
     try {
+      const deviceId = getDeviceId();
       const response = await fetch('/api/impostor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -54,6 +86,7 @@ export default function UnirseImpostor() {
           action: 'join',
           roomCode: roomCode.toUpperCase(),
           playerName: name.trim(),
+          deviceId,
         }),
       });
       const data = await response.json();

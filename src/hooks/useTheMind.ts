@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TheMindGameState } from '@/types/game';
+import { getDeviceId } from '@/lib/deviceId';
 
 const POLL_INTERVAL = 1500; // 1.5 seconds for faster sync
 
@@ -107,11 +108,13 @@ export function useTheMind(): UseTheMindResult {
   }, [game?.roomCode, playerId]);
 
   const createGame = useCallback(async (playerName: string): Promise<boolean> => {
-    return apiCall('create', { playerName });
+    const deviceId = getDeviceId();
+    return apiCall('create', { playerName, deviceId });
   }, [apiCall]);
 
   const joinGame = useCallback(async (roomCode: string, playerName: string): Promise<boolean> => {
-    return apiCall('join', { roomCode, playerName });
+    const deviceId = getDeviceId();
+    return apiCall('join', { roomCode, playerName, deviceId });
   }, [apiCall]);
 
   const rejoinGame = useCallback(async (roomCode: string, storedPlayerId: string): Promise<boolean> => {

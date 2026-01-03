@@ -42,7 +42,7 @@ export function generateKeyCard(): KeyCard {
 }
 
 // Create initial game state
-export function createGame(hostName: string): GameState {
+export function createGame(hostName: string, deviceId?: string): GameState {
   const roomCode = generateRoomCode();
   const keyCard = generateKeyCard();
   const words = getRandomWords(25);
@@ -59,6 +59,7 @@ export function createGame(hostName: string): GameState {
     team: null,
     role: null,
     isHost: true,
+    deviceId,
   };
 
   const now = Date.now();
@@ -89,13 +90,14 @@ export function createGame(hostName: string): GameState {
 }
 
 // Add a player to the game
-export function addPlayer(game: GameState, playerName: string): { game: GameState; player: Player } {
+export function addPlayer(game: GameState, playerName: string, deviceId?: string): { game: GameState; player: Player } {
   const player: Player = {
     id: uuidv4(),
     name: playerName,
     team: null,
     role: null,
     isHost: false,
+    deviceId,
   };
 
   return {

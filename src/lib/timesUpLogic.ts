@@ -32,7 +32,7 @@ export function getRandomAvatar(usedAvatars: string[]): string {
 }
 
 // Create initial game state
-export function createGame(hostName: string): TimesUpGameState {
+export function createGame(hostName: string, deviceId?: string): TimesUpGameState {
   const roomCode = generateRoomCode();
   const avatar = getRandomAvatar([]);
 
@@ -43,6 +43,7 @@ export function createGame(hostName: string): TimesUpGameState {
     team: null,
     isHost: true,
     cardsGuessedThisGame: 0,
+    deviceId,
   };
 
   const now = Date.now();
@@ -71,7 +72,8 @@ export function createGame(hostName: string): TimesUpGameState {
 // Add a player to the game
 export function addPlayer(
   game: TimesUpGameState,
-  playerName: string
+  playerName: string,
+  deviceId?: string
 ): { game: TimesUpGameState; player: TimesUpPlayer } {
   const usedAvatars = game.players.map(p => p.avatar);
   const avatar = getRandomAvatar(usedAvatars);
@@ -83,6 +85,7 @@ export function addPlayer(
     team: null,
     isHost: false,
     cardsGuessedThisGame: 0,
+    deviceId,
   };
 
   return {

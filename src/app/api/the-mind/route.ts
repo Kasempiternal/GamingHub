@@ -169,7 +169,7 @@ function getSanitizedGame(game: TheMindGameState, playerId?: string): TheMindGam
 }
 
 // Create new game
-async function createGame(playerName: string): Promise<{ game: TheMindGameState; playerId: string }> {
+async function createGame(playerName: string, deviceId?: string): Promise<{ game: TheMindGameState; playerId: string }> {
   const roomCode = generateRoomCode();
   const playerId = generatePlayerId();
 
@@ -180,6 +180,7 @@ async function createGame(playerName: string): Promise<{ game: TheMindGameState;
     isHost: true,
     isReady: false,
     isProposingStar: false,
+    deviceId,
   };
 
   const game: TheMindGameState = {
@@ -211,10 +212,36 @@ async function createGame(playerName: string): Promise<{ game: TheMindGameState;
 }
 
 // Join game
-async function joinGame(roomCode: string, playerName: string): Promise<{ game: TheMindGameState; playerId: string } | null> {
+async function joinGame(roomCode: string, playerName: string, deviceId?: string): Promise<{ game: TheMindGameState; playerId: string; reconnected?: boolean } | null> {
   const game = await getGame(roomCode);
-  if (!game || game.phase !== 'lobby') return null;
+  if (!game) return null;
+
+  // Check if device already has a player in this game (auto-reconnect)
+  if (deviceId) {
+    const existingByDevice = game.players.find(p => p.deviceId === deviceId);
+    if (existingByDevice) {
+      game.lastActivity = Date.now();
+      await setGame(roomCode, game);
+      return { game, playerId: existingByDevice.id, reconnected: true };
+    }
+  }
+
+  // Check if player already exists by name (legacy reconnect)
+  if (playerName) {
+    const existingPlayer = game.players.find(
+      p => p.name.toLowerCase() === playerName.toLowerCase().trim()
+    );
+    if (existingPlayer) {
+      return { game, playerId: existingPlayer.id, reconnected: true };
+    }
+  }
+
+  // Can't join if game already started
+  if (game.phase !== 'lobby') return null;
   if (game.players.length >= 4) return null;
+
+  // New player requires a name
+  if (!playerName || playerName.trim().length < 2) return null;
 
   const playerId = generatePlayerId();
   const player: TheMindPlayer = {
@@ -224,6 +251,7 @@ async function joinGame(roomCode: string, playerName: string): Promise<{ game: T
     isHost: false,
     isReady: false,
     isProposingStar: false,
+    deviceId,
   };
 
   game.players.push(player);
@@ -571,14 +599,14 @@ async function resetGame(roomCode: string, playerId: string): Promise<TheMindGam
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, roomCode, playerId, playerName, cardValue } = body;
+    const { action, roomCode, playerId, playerName, cardValue, deviceId } = body;
 
     switch (action) {
       case 'create': {
         if (!playerName) {
           return NextResponse.json({ success: false, error: 'Se requiere nombre de jugador' });
         }
-        const result = await createGame(playerName);
+        const result = await createGame(playerName, deviceId);
         return NextResponse.json({
           success: true,
           data: {
@@ -589,10 +617,10 @@ export async function POST(request: NextRequest) {
       }
 
       case 'join': {
-        if (!roomCode || !playerName) {
-          return NextResponse.json({ success: false, error: 'Se requiere codigo de sala y nombre' });
+        if (!roomCode) {
+          return NextResponse.json({ success: false, error: 'Se requiere codigo de sala' });
         }
-        const result = await joinGame(roomCode, playerName);
+        const result = await joinGame(roomCode, playerName || '', deviceId);
         if (!result) {
           return NextResponse.json({ success: false, error: 'No se pudo unir a la sala' });
         }
@@ -601,6 +629,7 @@ export async function POST(request: NextRequest) {
           data: {
             game: getSanitizedGame(result.game, result.playerId),
             playerId: result.playerId,
+            reconnected: result.reconnected,
           },
         });
       }
