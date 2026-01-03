@@ -46,7 +46,7 @@ export function useTimesUp(roomCode: string, playerId: string | null): UseTimesU
     if (!roomCode) return;
 
     try {
-      const response = await fetch('/api/timesup', {
+      const response = await fetch('/api/times-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,7 +139,7 @@ export function useTimesUp(roomCode: string, playerId: string | null): UseTimesU
 
   const apiAction = async (action: string, additionalData: Record<string, unknown> = {}) => {
     try {
-      const response = await fetch('/api/timesup', {
+      const response = await fetch('/api/times-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

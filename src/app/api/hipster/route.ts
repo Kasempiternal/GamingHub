@@ -135,18 +135,33 @@ function isOriginalTrack(trackName: string): boolean {
 }
 
 // Draw a song for a player (anti-cheat: exclude their contributions)
-function drawSongForPlayer(
-  songPool: HipsterSong[],
-  usedSongs: string[],
+// Dynamically injects more songs from catalog if pool is exhausted
+async function drawSongForPlayer(
+  game: HipsterGameState,
   playerId: string
-): HipsterSong | null {
+): Promise<HipsterSong | null> {
+  const { songPool, usedSongs } = game;
+
   // Filter out: used songs AND songs contributed by current player
-  const available = songPool.filter(song =>
+  let available = songPool.filter(song =>
     !usedSongs.includes(song.id) && song.addedBy !== playerId
   );
 
+  // If running low on songs, proactively inject more from catalog
+  if (available.length < 3) {
+    console.log(`[Hipster] Song pool running low (${available.length} available). Injecting more songs...`);
+    const injected = await injectRandomSongs(game, 10);
+    console.log(`[Hipster] Injected ${injected} new songs from catalog. Pool now has ${game.songPool.length} songs.`);
+
+    // Refresh available songs after injection
+    available = game.songPool.filter(song =>
+      !usedSongs.includes(song.id) && song.addedBy !== playerId
+    );
+  }
+
   if (available.length === 0) {
-    // Recycle used songs, still excluding player's contributions
+    // Only recycle if catalog is truly exhausted (all 199 songs used!)
+    console.log('[Hipster] All catalog songs exhausted. Recycling used songs...');
     const recycled = songPool.filter(song => song.addedBy !== playerId);
     if (recycled.length === 0) {
       return null; // Edge case: all songs are from this player
@@ -704,7 +719,7 @@ async function handleStartGame(roomCode: string, playerId: string) {
 
   // Deal initial card to each player
   for (const p of game.players) {
-    const song = drawSongForPlayer(game.songPool, game.usedSongs, p.id);
+    const song = await drawSongForPlayer(game, p.id);
     if (song) {
       p.timeline.push({
         song,
@@ -717,7 +732,7 @@ async function handleStartGame(roomCode: string, playerId: string) {
 
   // Start first turn
   const firstPlayerId = game.turnOrder[0];
-  const firstSong = drawSongForPlayer(game.songPool, game.usedSongs, firstPlayerId);
+  const firstSong = await drawSongForPlayer(game, firstPlayerId);
 
   if (firstSong) {
     game.currentTurn = {
@@ -950,8 +965,8 @@ async function handleNextTurn(roomCode: string, playerId: string) {
   game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.turnOrder.length;
   const nextPlayerId = game.turnOrder[game.currentPlayerIndex];
 
-  // Draw new song for next player
-  const nextSong = drawSongForPlayer(game.songPool, game.usedSongs, nextPlayerId);
+  // Draw new song for next player (may inject more songs if pool is low)
+  const nextSong = await drawSongForPlayer(game, nextPlayerId);
 
   if (nextSong) {
     game.currentTurn = {
@@ -1271,8 +1286,8 @@ async function handleSkipTurn(roomCode: string, playerId: string) {
   game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.turnOrder.length;
   const nextPlayerId = game.turnOrder[game.currentPlayerIndex];
 
-  // Draw new song for next player
-  const nextSong = drawSongForPlayer(game.songPool, game.usedSongs, nextPlayerId);
+  // Draw new song for next player (may inject more songs if pool is low)
+  const nextSong = await drawSongForPlayer(game, nextPlayerId);
 
   if (nextSong) {
     game.currentTurn = {
