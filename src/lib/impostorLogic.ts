@@ -70,7 +70,6 @@ export function createGame(hostName: string): ImpostorGameState {
     winner: null,
     winReason: null,
     impostorCount: 1,
-    mrWhiteCount: 0,
     createdAt: now,
     lastActivity: now,
     revealingPlayer: null,
@@ -109,48 +108,32 @@ export function addPlayer(game: ImpostorGameState, playerName: string): { game: 
 }
 
 // Calculate impostor count based on player count
-export function calculateRoles(playerCount: number): { impostorCount: number; mrWhiteCount: number } {
+export function calculateRoles(playerCount: number): number {
   if (playerCount <= 4) {
-    return { impostorCount: 1, mrWhiteCount: 0 };
+    return 1;
   } else if (playerCount <= 6) {
-    return { impostorCount: 1, mrWhiteCount: 0 };
+    return 1;
   } else if (playerCount <= 8) {
-    return { impostorCount: 2, mrWhiteCount: 0 };
+    return 2;
   } else if (playerCount <= 10) {
-    return { impostorCount: 2, mrWhiteCount: 1 };
+    return 2;
   } else {
-    return { impostorCount: 3, mrWhiteCount: 1 };
+    return 3;
   }
 }
 
 // Assign roles to players
-function assignRoles(players: ImpostorPlayer[], wordPair: ImpostorWordPair, impostorCount: number, mrWhiteCount: number): ImpostorPlayer[] {
+function assignRoles(players: ImpostorPlayer[], wordPair: ImpostorWordPair, impostorCount: number): ImpostorPlayer[] {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
 
   return shuffled.map((player, index) => {
-    let role: ImpostorRole;
-    let word: string | null;
-    let hint: string | null;
-
-    if (index < impostorCount) {
-      role = 'impostor';
-      word = wordPair.impostor;
-      hint = wordPair.hint;
-    } else if (index < impostorCount + mrWhiteCount) {
-      role = 'mr-white';
-      word = null;
-      hint = wordPair.hint;
-    } else {
-      role = 'civilian';
-      word = wordPair.civilian;
-      hint = null;
-    }
+    const isImpostor = index < impostorCount;
 
     return {
       ...player,
-      role,
-      word,
-      hint,
+      role: isImpostor ? 'impostor' : 'civilian',
+      word: isImpostor ? wordPair.impostor : wordPair.civilian,
+      hint: isImpostor ? wordPair.hint : null,
       hasDescribed: false,
       hasVoted: false,
       votedFor: null,
@@ -164,9 +147,9 @@ export function startGame(game: ImpostorGameState): { game: ImpostorGameState; e
     return { game, error: 'Se necesitan al menos 3 jugadores' };
   }
 
-  const { impostorCount, mrWhiteCount } = calculateRoles(game.players.length);
+  const impostorCount = calculateRoles(game.players.length);
   const wordPair = getRandomWordPair();
-  const playersWithRoles = assignRoles(game.players, wordPair, impostorCount, mrWhiteCount);
+  const playersWithRoles = assignRoles(game.players, wordPair, impostorCount);
 
   // Create random speaker order
   const activePlayers = playersWithRoles.filter(p => !p.isEliminated);
@@ -179,7 +162,6 @@ export function startGame(game: ImpostorGameState): { game: ImpostorGameState; e
       players: playersWithRoles,
       currentWordPair: wordPair,
       impostorCount,
-      mrWhiteCount,
       currentRound: 1,
       speakerOrder,
       speakerIndex: 0,
@@ -373,7 +355,7 @@ export function revealVotes(game: ImpostorGameState): { game: ImpostorGameState;
 
   // Check win conditions
   const remainingPlayers = updatedPlayers.filter(p => !p.isEliminated);
-  const remainingImpostors = remainingPlayers.filter(p => p.role === 'impostor' || p.role === 'mr-white');
+  const remainingImpostors = remainingPlayers.filter(p => p.role === 'impostor');
   const remainingCivilians = remainingPlayers.filter(p => p.role === 'civilian');
 
   let winner: 'civilians' | 'impostors' | null = null;
@@ -422,8 +404,8 @@ export function startNextRound(game: ImpostorGameState): { game: ImpostorGameSta
 
     return {
       ...p,
-      word: p.role === 'civilian' ? wordPair.civilian : (p.role === 'impostor' ? wordPair.impostor : null),
-      hint: p.role === 'mr-white' || p.role === 'impostor' ? wordPair.hint : null,
+      word: p.role === 'civilian' ? wordPair.civilian : wordPair.impostor,
+      hint: p.role === 'impostor' ? wordPair.hint : null,
       hasDescribed: false,
       hasVoted: false,
       votedFor: null,
@@ -471,12 +453,8 @@ export function endGame(game: ImpostorGameState): ImpostorGameState {
 
     if (game.winner === 'civilians' && p.role === 'civilian' && !p.isEliminated) {
       points += 2;
-    } else if (game.winner === 'impostors') {
-      if (p.role === 'impostor' && !p.isEliminated) {
-        points += 10;
-      } else if (p.role === 'mr-white' && !p.isEliminated) {
-        points += 6;
-      }
+    } else if (game.winner === 'impostors' && p.role === 'impostor' && !p.isEliminated) {
+      points += 10;
     }
 
     return { ...p, points };

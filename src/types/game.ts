@@ -88,7 +88,7 @@ export interface ApiResponse<T> {
 // IMPOSTOR GAME TYPES
 // ============================================
 
-export type ImpostorRole = 'civilian' | 'impostor' | 'mr-white';
+export type ImpostorRole = 'civilian' | 'impostor';
 export type ImpostorPhase = 'lobby' | 'description' | 'discussion' | 'voting' | 'reveal' | 'finished';
 
 export interface ImpostorPlayer {
@@ -141,7 +141,6 @@ export interface ImpostorGameState {
   winner: 'civilians' | 'impostors' | null;
   winReason: string | null;
   impostorCount: number;
-  mrWhiteCount: number;
   createdAt: number;
   lastActivity: number;
   // Reveal animation state

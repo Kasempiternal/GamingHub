@@ -37,8 +37,6 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
     switch (player.role) {
       case 'impostor':
         return 'from-red-600 to-red-800';
-      case 'mr-white':
-        return 'from-gray-400 to-gray-600';
       case 'civilian':
         return 'from-green-600 to-green-800';
       default:
@@ -50,8 +48,6 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
     switch (player.role) {
       case 'impostor':
         return '¡ERA UN IMPOSTOR!';
-      case 'mr-white':
-        return '¡ERA MR. WHITE!';
       case 'civilian':
         return 'Era un civil inocente...';
       default:
@@ -62,11 +58,9 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
   const getRoleEmoji = () => {
     switch (player.role) {
       case 'impostor':
-        return '🕵️';
-      case 'mr-white':
-        return '👻';
+        return '😈';
       case 'civilian':
-        return '😢';
+        return '😇';
       default:
         return '❓';
     }
@@ -193,15 +187,11 @@ export function RevealAnimation({ player, onComplete }: RevealAnimationProps) {
                 initial={{
                   boxShadow: player.role === 'impostor'
                     ? '0 0 20px rgba(220, 38, 38, 0.5)'
-                    : player.role === 'mr-white'
-                    ? '0 0 20px rgba(156, 163, 175, 0.5)'
                     : '0 0 20px rgba(34, 197, 94, 0.5)',
                 }}
                 animate={{
                   boxShadow: player.role === 'impostor'
                     ? ['0 0 20px rgba(220, 38, 38, 0.5)', '0 0 60px rgba(220, 38, 38, 0.8)', '0 0 40px rgba(220, 38, 38, 0.6)']
-                    : player.role === 'mr-white'
-                    ? ['0 0 20px rgba(156, 163, 175, 0.5)', '0 0 60px rgba(156, 163, 175, 0.8)', '0 0 40px rgba(156, 163, 175, 0.6)']
                     : ['0 0 20px rgba(34, 197, 94, 0.5)', '0 0 60px rgba(34, 197, 94, 0.8)', '0 0 40px rgba(34, 197, 94, 0.6)'],
                 }}
                 transition={{ duration: 1.5, ease: 'easeOut' }}

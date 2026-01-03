@@ -276,7 +276,7 @@ export function VoteReveal({
   onComplete,
 }: {
   votes: { voter: string; target: string }[];
-  eliminatedPlayer?: { name: string; role: 'impostor' | 'civilian' | 'mr-white' };
+  eliminatedPlayer?: { name: string; role: 'impostor' | 'civilian' };
   onComplete?: () => void;
 }) {
   const [showingVote, setShowingVote] = useState(-1);
@@ -338,19 +338,15 @@ export function VoteReveal({
                 }}
                 transition={{ duration: 0.5 }}
               >
-                {eliminatedPlayer.role === 'impostor' ? '🎭' : '😢'}
+                {eliminatedPlayer.role === 'impostor' ? '😈' : '😇'}
               </motion.div>
               <h2 className="text-3xl font-bold text-white mb-2">
                 {eliminatedPlayer.name}
               </h2>
               <p className={`text-xl ${
-                eliminatedPlayer.role === 'impostor' ? 'text-red-400' :
-                eliminatedPlayer.role === 'mr-white' ? 'text-gray-400' :
-                'text-green-400'
+                eliminatedPlayer.role === 'impostor' ? 'text-red-400' : 'text-green-400'
               }`}>
-                {eliminatedPlayer.role === 'impostor' ? '¡Era el Impostor!' :
-                 eliminatedPlayer.role === 'mr-white' ? '¡Era Mr. White!' :
-                 'Era un Civil inocente...'}
+                {eliminatedPlayer.role === 'impostor' ? '¡Era el Impostor!' : 'Era un Civil inocente...'}
               </p>
             </>
           ) : (

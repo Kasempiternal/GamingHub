@@ -33,8 +33,6 @@ export function PlayerCard({
     switch (player.role) {
       case 'impostor':
         return 'bg-red-600';
-      case 'mr-white':
-        return 'bg-gray-400';
       case 'civilian':
         return 'bg-green-600';
       default:
@@ -45,11 +43,9 @@ export function PlayerCard({
   const getRoleText = () => {
     switch (player.role) {
       case 'impostor':
-        return 'Impostor';
-      case 'mr-white':
-        return 'Mr. White';
+        return '😈 Impostor';
       case 'civilian':
-        return 'Civil';
+        return '😇 Civil';
       default:
         return '';
     }

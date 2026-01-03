@@ -48,8 +48,6 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
     switch (role) {
       case 'impostor':
         return 'IMPOSTOR';
-      case 'mr-white':
-        return 'MR. WHITE';
       case 'civilian':
         return 'CIVIL';
       default:
@@ -60,11 +58,9 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
   const getRoleIcon = () => {
     switch (role) {
       case 'impostor':
-        return '🕵️';
-      case 'mr-white':
-        return '👻';
+        return '😈';
       case 'civilian':
-        return '👤';
+        return '😇';
       default:
         return '❓';
     }
@@ -254,12 +250,6 @@ export function WordReveal({ word, hint, role, category }: WordRevealProps) {
           <div className="text-sm text-slate-300">
             <p className="text-slate-400 font-semibold mb-1">🎭 Tu mision:</p>
             <p>Describe tu palabra sin que los civiles sospechen. Tu palabra es diferente a la de ellos!</p>
-          </div>
-        )}
-        {role === 'mr-white' && (
-          <div className="text-sm text-slate-300">
-            <p className="text-slate-400 font-semibold mb-1">🎭 Tu mision:</p>
-            <p>No sabes la palabra. Usa la pista para adivinar y mezclarte con los civiles.</p>
           </div>
         )}
         {role === 'civilian' && (

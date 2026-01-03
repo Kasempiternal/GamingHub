@@ -423,13 +423,9 @@ export default function ImpostorRoom() {
                         <span className="text-xl font-bold text-white">{kicked.name}</span>
                         <span className={`
                           px-3 py-1 rounded-full text-sm font-bold
-                          ${kicked.role === 'impostor' ? 'bg-red-500 text-white' :
-                            kicked.role === 'mr-white' ? 'bg-gray-400 text-black' :
-                            'bg-green-500 text-white'}
+                          ${kicked.role === 'impostor' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}
                         `}>
-                          {kicked.role === 'impostor' ? '🕵️ Impostor' :
-                           kicked.role === 'mr-white' ? '👻 Mr. White' :
-                           '👤 Civil'}
+                          {kicked.role === 'impostor' ? '😈 Impostor' : '😇 Civil'}
                         </span>
                       </div>
                     );
