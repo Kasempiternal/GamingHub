@@ -12,6 +12,7 @@ interface TeamScoreboardProps {
   blueTeamNames: string[];
   psychicId?: string;
   players: { id: string; name: string; team: WavelengthTeam | null }[];
+  myPlayerId?: string;
 }
 
 export function TeamScoreboard({
@@ -23,6 +24,7 @@ export function TeamScoreboard({
   blueTeamNames,
   psychicId,
   players,
+  myPlayerId,
 }: TeamScoreboardProps) {
   const redTeamPlayers = players.filter(p => p.team === 'red');
   const blueTeamPlayers = players.filter(p => p.team === 'blue');
@@ -91,10 +93,13 @@ export function TeamScoreboard({
                 className={`text-xs px-2 py-1 rounded-full ${
                   p.id === psychicId
                     ? 'bg-red-500 text-white font-bold'
-                    : 'bg-red-500/20 text-red-300'
+                    : p.id === myPlayerId
+                      ? 'bg-red-400/40 text-white ring-1 ring-red-300 font-medium'
+                      : 'bg-red-500/20 text-red-300'
                 }`}
               >
                 {p.name}
+                {p.id === myPlayerId && ' (Tú)'}
                 {p.id === psychicId && ' 🔮'}
               </div>
             ))}
@@ -110,11 +115,14 @@ export function TeamScoreboard({
                 className={`text-xs px-2 py-1 rounded-full ${
                   p.id === psychicId
                     ? 'bg-blue-500 text-white font-bold'
-                    : 'bg-blue-500/20 text-blue-300'
+                    : p.id === myPlayerId
+                      ? 'bg-blue-400/40 text-white ring-1 ring-blue-300 font-medium'
+                      : 'bg-blue-500/20 text-blue-300'
                 }`}
               >
                 {p.id === psychicId && '🔮 '}
                 {p.name}
+                {p.id === myPlayerId && ' (Tú)'}
               </div>
             ))}
           </div>

@@ -96,6 +96,28 @@ export default function WavelengthRoomPage() {
 
   const opposingTeam = myTeam === 'red' ? 'blue' : 'red';
 
+  // Helper function for phase-specific action hints
+  const getPhaseAction = () => {
+    if (!game) return '';
+    switch (game.phase) {
+      case 'psychicClue':
+        return isPsychic ? 'Da una pista a tu equipo' : 'Esperando pista del psíquico...';
+      case 'teamGuess':
+        if (!isMyTeamsTurn) return 'El otro equipo está adivinando...';
+        return isPsychic ? 'Tu equipo está eligiendo' : '¡Mueve el dial y confirma!';
+      case 'counterGuess':
+        return myTeam === game.currentTeam
+          ? 'El otro equipo contra-adivina...'
+          : '¡Elige izquierda o derecha!';
+      case 'reveal':
+        return 'Revelando resultado...';
+      case 'roundEnd':
+        return 'Resultado de la ronda';
+      default:
+        return '';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-cyan-900 to-slate-900">
       {/* Header */}
@@ -119,6 +141,62 @@ export default function WavelengthRoomPage() {
           </div>
         </div>
       </header>
+
+      {/* Player Identity Banner - shows during game */}
+      {game.phase !== 'lobby' && player && myTeam && (
+        <div className={`max-w-lg mx-auto px-4 pt-4`}>
+          <div className={`p-3 rounded-xl border-2 ${
+            myTeam === 'red'
+              ? 'bg-red-500/20 border-red-500/50'
+              : 'bg-blue-500/20 border-blue-500/50'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{player.avatar}</span>
+                <div>
+                  <span className="font-bold text-white">{player.name}</span>
+                  <span className={`ml-2 text-sm ${myTeam === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
+                    Equipo {myTeam === 'red' ? 'Rojo' : 'Azul'}
+                  </span>
+                </div>
+              </div>
+              {isPsychic && (
+                <span className="px-3 py-1 bg-purple-500/30 text-purple-300 rounded-full text-sm font-bold">
+                  🔮 Psíquico
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Turn Indicator Banner - shows during game */}
+      {game.phase !== 'lobby' && game.phase !== 'finished' && (
+        <div className="max-w-lg mx-auto px-4 pt-3">
+          <motion.div
+            className={`p-4 rounded-xl text-center ${
+              isMyTeamsTurn
+                ? 'bg-gradient-to-r from-cyan-500/30 to-blue-500/30 ring-2 ring-cyan-400'
+                : 'bg-slate-800/50'
+            }`}
+            animate={{ scale: isMyTeamsTurn ? [1, 1.02, 1] : 1 }}
+            transition={{ duration: 2, repeat: isMyTeamsTurn ? Infinity : 0 }}
+          >
+            <div className="text-lg font-bold">
+              {isMyTeamsTurn ? (
+                <span className="text-cyan-400">¡TURNO DE TU EQUIPO!</span>
+              ) : (
+                <span className="text-white/60">
+                  Turno del Equipo {game.currentTeam === 'red' ? 'Rojo' : 'Azul'}
+                </span>
+              )}
+            </div>
+            <div className="text-sm text-white/50 mt-1">
+              {getPhaseAction()}
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
         {/* LOBBY PHASE */}
@@ -252,6 +330,7 @@ export default function WavelengthRoomPage() {
               blueTeamNames={game.players.filter(p => p.team === 'blue').map(p => p.name)}
               psychicId={game.currentRound?.psychicId}
               players={game.players}
+              myPlayerId={playerId || undefined}
             />
 
             {/* Current round info */}
@@ -443,7 +522,7 @@ export default function WavelengthRoomPage() {
         {/* ROUND END PHASE */}
         {game.phase === 'roundEnd' && game.currentRound && (
           <div className="space-y-6">
-            <GuessReveal round={game.currentRound} currentTeam={game.currentTeam} />
+            <GuessReveal round={game.currentRound} currentTeam={game.currentTeam} myTeam={myTeam} />
 
             <RadialDial
               leftConcept={game.currentRound.spectrumCard.leftConcept}

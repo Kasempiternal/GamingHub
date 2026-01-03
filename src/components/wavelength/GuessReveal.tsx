@@ -6,20 +6,24 @@ import type { WavelengthRound, WavelengthTeam } from '@/types/game';
 interface GuessRevealProps {
   round: WavelengthRound;
   currentTeam: WavelengthTeam;
+  myTeam: WavelengthTeam | null;
 }
 
-export function GuessReveal({ round, currentTeam }: GuessRevealProps) {
+export function GuessReveal({ round, currentTeam, myTeam }: GuessRevealProps) {
   const { targetPosition, teamGuess, pointsAwarded, counterGuess, counterPointAwarded } = round;
 
   // Calculate distance
   const distance = teamGuess !== null ? Math.abs(targetPosition - teamGuess) : 0;
 
-  // Get result message
+  // Is this MY team's result?
+  const isMyTeamResult = myTeam === currentTeam;
+
+  // Get result message - contextualized based on whether it's your team or not
   const getResultMessage = () => {
-    if (pointsAwarded === 4) return '¡PERFECTO!';
-    if (pointsAwarded === 3) return '¡MUY CERCA!';
-    if (pointsAwarded === 2) return '¡BIEN!';
-    return '¡FALLASTE!';
+    if (pointsAwarded === 4) return isMyTeamResult ? '¡PERFECTO! 🎯' : '¡Acertaron!';
+    if (pointsAwarded === 3) return isMyTeamResult ? '¡MUY CERCA! 🔥' : 'Estuvieron cerca';
+    if (pointsAwarded === 2) return isMyTeamResult ? '¡BIEN! 👍' : 'No está mal';
+    return isMyTeamResult ? '¡FALLASTE! 😅' : '¡Fallaron!';
   };
 
   // Get result color
@@ -35,8 +39,22 @@ export function GuessReveal({ round, currentTeam }: GuessRevealProps) {
   const opposingTeam = currentTeam === 'red' ? 'Azul' : 'Rojo';
   const opposingTeamColor = currentTeam === 'red' ? 'text-blue-400' : 'text-red-400';
 
+  // Team label for context
+  const teamLabel = isMyTeamResult
+    ? 'Tu equipo:'
+    : `Equipo ${currentTeam === 'red' ? 'Rojo' : 'Azul'}:`;
+
   return (
     <div className="space-y-6 text-center">
+      {/* Team context label */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`text-sm font-medium ${isMyTeamResult ? 'text-cyan-400' : 'text-white/60'}`}
+      >
+        {teamLabel}
+      </motion.div>
+
       {/* Main result */}
       <motion.div
         initial={{ scale: 0, opacity: 0 }}
