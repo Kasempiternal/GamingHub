@@ -898,6 +898,29 @@ export default function HipsterRoom() {
                 </div>
               </motion.div>
 
+              {/* Song Contributor Label */}
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center mb-3"
+              >
+                <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-full">
+                  {game.currentTurn.song.addedBy === 'system' ? (
+                    <>
+                      <span>🎶</span>
+                      <span className="text-purple-300 text-sm font-medium">Del Catálogo</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{game.players.find(p => p.id === game.currentTurn?.song.addedBy)?.avatar || '🎵'}</span>
+                      <span className="text-purple-300 text-sm font-medium">
+                        Selección de {game.players.find(p => p.id === game.currentTurn?.song.addedBy)?.name || 'Desconocido'}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </motion.div>
+
               {/* Audio Player */}
               <div className="mb-4">
                 <AudioPlayer
@@ -1071,7 +1094,7 @@ export default function HipsterRoom() {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={() => {
-                            intercept(interceptPosition);
+                            intercept(interceptPosition, selectedType || 'slot');
                             setInterceptPosition(null);
                             setSelectedType(null);
                           }}

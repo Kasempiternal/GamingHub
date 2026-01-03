@@ -408,7 +408,7 @@ export async function POST(request: NextRequest) {
       case 'nextTurn':
         return handleNextTurn(roomCode, playerId);
       case 'intercept':
-        return handleIntercept(roomCode, playerId, data.position ?? null);
+        return handleIntercept(roomCode, playerId, data.position ?? null, data.type);
       case 'interceptTimeout':
         return handleInterceptTimeout(roomCode, playerId);
       case 'resolveIntercept':
@@ -1015,7 +1015,7 @@ async function handleNextTurn(roomCode: string, playerId: string) {
   return success({ game });
 }
 
-async function handleIntercept(roomCode: string, playerId: string, position: number | null) {
+async function handleIntercept(roomCode: string, playerId: string, position: number | null, selectionType?: 'slot' | 'year') {
   const game = await getGame(roomCode);
   if (!game) return error('Sala no encontrada');
 
@@ -1097,7 +1097,7 @@ async function handleIntercept(roomCode: string, playerId: string, position: num
     if (!currentPlayer) return error('Jugador actual no encontrado');
 
     const song = game.currentTurn.song;
-    const interceptCorrect = checkGuessCorrect(currentPlayer.timeline, song, position);
+    const interceptCorrect = checkGuessCorrect(currentPlayer.timeline, song, position, selectionType || 'slot');
 
     game.usedSongs.push(song.id);
 
