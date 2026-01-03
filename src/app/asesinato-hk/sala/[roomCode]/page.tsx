@@ -8,7 +8,7 @@ import { useAsesinato } from '@/hooks/useAsesinato';
 import { getRoleName, getRoleDescription } from '@/lib/asesinatoLogic';
 import { playRevealSound, playSelectSound, playVictorySound, playErrorSound, playClickSound, playWarningSound, playNotificationSound, playCountdownSound, startSleepingAmbience, stopSleepingAmbience, playWakeUpSound, triggerWakeVibration } from '@/lib/audioUtils';
 import type { AsesinatoPlayer, AsesinatoSceneTile, AsesinatoClueCard, AsesinatoMeansCard } from '@/types/game';
-import { AsesinatoHelper, AsesinatoHelperToggle, HoldButton } from '@/components/asesinato-hk';
+import { AsesinatoHelper, AsesinatoHelperToggle, HoldButton, RoleReveal } from '@/components/asesinato-hk';
 
 export default function AsesinatoRoomPage() {
   const params = useParams();
@@ -359,57 +359,23 @@ export default function AsesinatoRoomPage() {
         );
 
       case 'roleReveal':
+        // Build team members for witness/criminals
+        const teamMembers = (isWitness || isMurderer || isAccomplice)
+          ? game.players
+              .filter(p => p.role === 'murderer' || p.role === 'accomplice')
+              .map(p => ({ name: p.name, role: p.role as 'murderer' | 'accomplice' }))
+          : undefined;
+
         return (
           <div className="space-y-6">
-            <motion.div
-              className="text-center"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
-            >
-              <h2 className="text-2xl font-bold text-white mb-4">Tu Rol</h2>
-              <div className={`text-5xl font-bold mb-4 ${getRoleColor(player?.role || null)}`}>
-                {player?.role ? getRoleName(player.role) : 'Cargando...'}
-              </div>
-              <p className="text-slate-400 max-w-md mx-auto">
-                {player?.role ? getRoleDescription(player.role) : ''}
-              </p>
-            </motion.div>
+            <h2 className="text-2xl font-bold text-white text-center mb-4">Tu Rol</h2>
 
-            {/* Role-specific info */}
-            {isWitness && (
-              <div className="bg-purple-900/30 border border-purple-700/50 rounded-xl p-4">
-                <h3 className="text-purple-400 font-semibold mb-2">Sospechosos que viste:</h3>
-                <div className="space-y-2">
-                  {game.players.filter(p => p.role === 'murderer' || p.role === 'accomplice').map(p => (
-                    <div key={p.id} className="flex items-center gap-2 text-white">
-                      <span>{p.avatar}</span>
-                      <span>{p.name}</span>
-                      <span className={`text-sm ${p.role === 'murderer' ? 'text-red-400' : 'text-orange-400'}`}>
-                        ({p.role === 'murderer' ? 'Asesino' : 'Complice'})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(isMurderer || isAccomplice) && (
-              <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-4">
-                <h3 className="text-red-400 font-semibold mb-2">Tu equipo criminal:</h3>
-                <div className="space-y-2">
-                  {game.players.filter(p => p.role === 'murderer' || p.role === 'accomplice').map(p => (
-                    <div key={p.id} className="flex items-center gap-2 text-white">
-                      <span>{p.avatar}</span>
-                      <span>{p.name}</span>
-                      <span className={`text-sm ${p.role === 'murderer' ? 'text-red-400' : 'text-orange-400'}`}>
-                        ({p.role === 'murderer' ? 'Asesino' : 'Complice'})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <RoleReveal
+              role={player?.role || null}
+              roleName={player?.role ? getRoleName(player.role) : ''}
+              roleDescription={player?.role ? getRoleDescription(player.role) : ''}
+              teamMembers={teamMembers}
+            />
 
             {isHost && (
               <button
@@ -968,11 +934,15 @@ export default function AsesinatoRoomPage() {
           />
         )}
 
-        {/* Player Role Badge */}
-        {player?.role && game.phase !== 'lobby' && (
-          <div className={`text-center mb-4 py-2 px-4 rounded-xl bg-slate-800/50 inline-flex items-center gap-2 w-full justify-center ${getRoleColor(player.role)}`}>
-            <span className="text-sm">Tu rol:</span>
-            <span className="font-bold">{getRoleName(player.role)}</span>
+        {/* Player Role Badge - Hidden behind hold gesture */}
+        {player?.role && game.phase !== 'lobby' && game.phase !== 'roleReveal' && game.phase !== 'finished' && (
+          <div className="flex justify-center mb-4">
+            <RoleReveal
+              role={player.role}
+              roleName={getRoleName(player.role)}
+              roleDescription={getRoleDescription(player.role)}
+              compact
+            />
           </div>
         )}
 
