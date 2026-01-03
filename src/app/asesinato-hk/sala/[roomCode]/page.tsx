@@ -1169,7 +1169,7 @@ function SceneTileComponent({
     <div className="bg-slate-800/70 rounded-xl p-4 border border-slate-700/50">
       <div className="flex justify-between items-center mb-3">
         <h4 className="text-white font-semibold text-sm">{tile.title}</h4>
-        {canReplace && onReplace && !tile.isLocked && (
+        {canReplace && onReplace && tile.isLocked && (
           <button
             onClick={onReplace}
             className="text-xs text-cyan-400 hover:text-cyan-300"
@@ -1177,7 +1177,7 @@ function SceneTileComponent({
             Reemplazar
           </button>
         )}
-        {tile.isLocked && (
+        {tile.isLocked && !canReplace && (
           <span className="text-xs text-slate-500">Bloqueado</span>
         )}
       </div>
