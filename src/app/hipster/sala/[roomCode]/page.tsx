@@ -552,6 +552,7 @@ export default function HipsterRoom() {
   const [bonusTitle, setBonusTitle] = useState('');
   const [interceptPosition, setInterceptPosition] = useState<number | null>(null);
   const [showInterceptUI, setShowInterceptUI] = useState(false);
+  const [scoreboardCollapsed, setScoreboardCollapsed] = useState(true);
   const [interceptCountdown, setInterceptCountdown] = useState<number>(0);
   const [interceptClaimError, setInterceptClaimError] = useState<string | null>(null);
   const [showInterceptClaimed, setShowInterceptClaimed] = useState(false);
@@ -848,8 +849,8 @@ export default function HipsterRoom() {
             )}
           </div>
 
-          {/* Non-turn player: Show turn player's timeline for strategic viewing during listening/guessing */}
-          {!isMyTurn && turnPlayer && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing') && (
+          {/* Non-turn player: Show turn player's timeline for strategic viewing */}
+          {!isMyTurn && turnPlayer && (
             <div className="bg-slate-900/40 backdrop-blur rounded-xl p-3 border border-purple-500/10">
               <p className="text-purple-400/60 text-xs mb-2">
                 Linea temporal de {turnPlayer.name} ({turnPlayer.timeline.length} cartas)
@@ -861,52 +862,32 @@ export default function HipsterRoom() {
             </div>
           )}
 
-          {/* Spectator Mode: Show minimized own timeline when watching others */}
-          {!isMyTurn && currentPlayer && (
-            <div className="bg-slate-900/40 backdrop-blur rounded-xl p-3 border border-purple-500/10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-purple-400/60 text-xs">
-                  Tu linea temporal ({currentPlayer.timeline.length}/{game.cardsToWin})
-                </span>
-                <span className="text-yellow-400 text-xs">🪙 {currentPlayer.tokens}</span>
-              </div>
-              {currentPlayer.timeline.length > 0 ? (
-                <div className="flex gap-1 overflow-x-auto pb-1">
-                  {currentPlayer.timeline.map((card, idx) => (
-                    <div
-                      key={card.song.id}
-                      className="flex-shrink-0 relative w-8 h-8 rounded-full bg-gradient-to-br from-zinc-800 to-black overflow-hidden"
-                      title={`${card.song.title} - ${card.song.releaseYear}`}
-                    >
-                      {card.song.albumArt ? (
-                        <div
-                          className="absolute inset-[15%] rounded-full bg-cover bg-center"
-                          style={{ backgroundImage: `url(${card.song.albumArt})` }}
-                        />
-                      ) : (
-                        <div className="absolute inset-[15%] rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
-                          <span className="text-[8px]">🎵</span>
-                        </div>
-                      )}
-                      <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 px-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full">
-                        <span className="text-white font-bold text-[6px]">{card.song.releaseYear}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-purple-400/40 text-xs text-center">Sin cartas todavia</p>
-              )}
-            </div>
-          )}
 
           {/* Phase Progress Indicator */}
           <div className="flex justify-between text-xs px-2">
-            <span className={game.currentTurn.phase === 'listening' ? 'text-purple-300 font-bold' : 'text-purple-400/40'}>🎧 Escuchar</span>
-            <span className={game.currentTurn.phase === 'guessing' ? 'text-purple-300 font-bold' : 'text-purple-400/40'}>🎯 Colocar</span>
-            <span className={game.currentTurn.phase === 'intercepting' ? 'text-yellow-300 font-bold' : 'text-purple-400/40'}>⚡ Intercep.</span>
-            <span className={game.currentTurn.phase === 'bonus' ? 'text-green-300 font-bold' : 'text-purple-400/40'}>🎁 Bonus</span>
-            <span className={game.currentTurn.phase === 'result' ? 'text-purple-300 font-bold' : 'text-purple-400/40'}>📊 Result</span>
+            {[
+              { phase: 'listening', emoji: '🎧' },
+              { phase: 'guessing', emoji: '🎯' },
+              { phase: 'intercepting', emoji: '⚡' },
+              { phase: 'bonus', emoji: '🎁' },
+              { phase: 'result', emoji: '📊' },
+            ].map(step => {
+              const order = ['listening', 'guessing', 'intercepting', 'bonus', 'result'];
+              const currentIdx = order.indexOf(game.currentTurn!.phase);
+              const stepIdx = order.indexOf(step.phase);
+              const isActive = step.phase === game.currentTurn!.phase;
+              const isPast = stepIdx < currentIdx;
+              return (
+                <span key={step.phase} className={`flex items-center gap-0.5 ${
+                  isActive ? 'text-purple-300 font-bold' : isPast ? 'text-purple-400/60' : 'text-purple-400/30'
+                }`}>
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                    isActive ? 'bg-purple-400' : isPast ? 'bg-purple-400/60' : 'bg-purple-400/20'
+                  }`} />
+                  {step.emoji}
+                </span>
+              );
+            })}
           </div>
 
           {/* Current Song - visible to ALL players during listening/guessing/intercepting */}
@@ -1020,7 +1001,12 @@ export default function HipsterRoom() {
           {/* Timeline */}
           {currentPlayer && (
             <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
-              <h3 className="text-purple-300 text-sm font-medium mb-2">Tu Linea Temporal ({currentPlayer.timeline.length}/{game.cardsToWin})</h3>
+              <h3 className="text-purple-300 text-sm font-medium mb-2">Tu Linea Temporal ({currentPlayer.timeline.length}/{game.cardsToWin}) <span className="text-yellow-400">🪙 {currentPlayer.tokens}</span></h3>
+              {isMyTurn && (game.currentTurn.phase === 'listening' || game.currentTurn.phase === 'guessing') && (
+                <p className="text-purple-400/50 text-[10px] mb-1">
+                  Toca un <span className="text-purple-300">año</span> = mismo año · Toca <span className="text-purple-300">+</span> = entre años
+                </p>
+              )}
               <Timeline
                 timeline={currentPlayer.timeline}
                 onSelectPosition={isMyTurn && game.currentTurn.phase !== 'result' ? (pos, type) => {
@@ -1080,7 +1066,7 @@ export default function HipsterRoom() {
                     <span className="text-white font-medium">
                       {interceptPhase === 'selecting'
                         ? 'Seleccionando posicion...'
-                        : 'Fase de Interceptacion'}
+                        : 'Interceptación!'}
                     </span>
                   </div>
                   <motion.div
@@ -1091,6 +1077,12 @@ export default function HipsterRoom() {
                     {interceptCountdown}s
                   </motion.div>
                 </div>
+
+                <p className="text-purple-400/60 text-xs">
+                  {interceptPhase === 'selecting'
+                    ? 'El interceptor elige donde colocar la carta'
+                    : `${turnPlayer?.name} falló! Gasta 1 token para robar la carta.`}
+                </p>
 
                 {/* Turn player's view - just waiting */}
                 {isMyTurn ? (
@@ -1160,19 +1152,6 @@ export default function HipsterRoom() {
                 ) : (
                   // DECIDING PHASE - Players can claim intercept
                   <>
-                    {/* Show turn player's timeline */}
-                    {turnPlayer && (
-                      <div className="space-y-2">
-                        <p className="text-purple-300 text-sm">
-                          Linea temporal de {turnPlayer.name} ({turnPlayer.timeline.length} cartas)
-                        </p>
-                        <Timeline
-                          timeline={turnPlayer.timeline}
-                          isInteractive={false}
-                        />
-                      </div>
-                    )}
-
                     {/* Real-time notification when someone claims */}
                     {showInterceptClaimed && game.currentTurn.interceptingPlayerId && (
                       <motion.div
@@ -1241,6 +1220,12 @@ export default function HipsterRoom() {
                         <p className="text-purple-400/50 text-sm">No tienes tokens para interceptar</p>
                       )}
                     </div>
+
+                    {interceptPhase === 'deciding' && (
+                      <p className="text-purple-400/40 text-[10px] text-center">
+                        Si aciertas, la carta va a TU línea. Si fallas, pierdes el token.
+                      </p>
+                    )}
                   </>
                 )}
 
@@ -1272,6 +1257,9 @@ export default function HipsterRoom() {
                     ⏱️ {bonusCountdown}s
                   </motion.div>
                 )}
+                <p className="text-purple-400/40 text-[10px]">
+                  La carátula se revelará después de adivinar
+                </p>
               </div>
               <input
                 type="text"
@@ -1363,42 +1351,78 @@ export default function HipsterRoom() {
                 <p className="text-red-400/60 text-sm">Posicion incorrecta - carta descartada</p>
               )}
 
-              {(isHost || isMyTurn) && (
+              {(isHost || isMyTurn) ? (
                 <button
                   onClick={nextTurn}
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl"
                 >
                   Siguiente Turno
                 </button>
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-2">
+                  <motion.div
+                    className="w-4 h-4 border-2 border-purple-400/40 border-t-purple-400 rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <p className="text-purple-400/50 text-sm">Esperando siguiente turno...</p>
+                </div>
               )}
             </div>
           )}
 
-          {/* Scoreboard */}
-          <div className="bg-slate-900/60 backdrop-blur rounded-xl p-4 border border-purple-500/20">
-            <h3 className="text-purple-300 text-sm font-medium mb-2">Puntuaciones</h3>
-            <div className="space-y-1">
-              {game.players
-                .sort((a, b) => b.timeline.length - a.timeline.length)
-                .map((player, idx) => (
-                  <div
-                    key={player.id}
-                    className={`flex items-center justify-between p-2 rounded-lg ${
-                      player.id === playerId ? 'bg-purple-500/20' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : ''}</span>
-                      <span>{player.avatar}</span>
-                      <span className="text-white text-sm">{player.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-purple-300 text-sm">{player.timeline.length} cartas</span>
-                      <span className="text-yellow-400 text-sm">🪙 {player.tokens}</span>
-                    </div>
+          {/* Scoreboard (collapsible) */}
+          <div className="bg-slate-900/60 backdrop-blur rounded-xl border border-purple-500/20 overflow-hidden">
+            <button
+              onClick={() => setScoreboardCollapsed(!scoreboardCollapsed)}
+              className="w-full flex items-center justify-between p-4 text-left"
+            >
+              <h3 className="text-purple-300 text-sm font-medium">Puntuaciones</h3>
+              <motion.span
+                className="text-purple-400/40 text-xs"
+                animate={{ rotate: scoreboardCollapsed ? 0 : 180 }}
+                transition={{ duration: 0.2 }}
+              >
+                ▼
+              </motion.span>
+            </button>
+            <AnimatePresence>
+              {!scoreboardCollapsed && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-4 pb-4 space-y-1">
+                    <p className="text-purple-400/40 text-[10px] mb-2">
+                      🪙 Tokens: se usan para interceptar (cuesta 1) y se ganan con bonus
+                    </p>
+                    {game.players
+                      .sort((a, b) => b.timeline.length - a.timeline.length)
+                      .map((player, idx) => (
+                        <div
+                          key={player.id}
+                          className={`flex items-center justify-between p-2 rounded-lg ${
+                            player.id === playerId ? 'bg-purple-500/20' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : ''}</span>
+                            <span>{player.avatar}</span>
+                            <span className="text-white text-sm">{player.name}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-purple-300 text-sm">{player.timeline.length} cartas</span>
+                            <span className="text-yellow-400 text-sm">🪙 {player.tokens}</span>
+                          </div>
+                        </div>
+                      ))}
                   </div>
-                ))}
-            </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </main>
