@@ -254,36 +254,26 @@ function checkGuessCorrect(
   guessedPosition: number,
   selectionType: 'slot' | 'year' = 'slot'
 ): boolean {
-  if (timeline.length === 0) {
-    return true; // First card is always correct
-  }
+  if (timeline.length === 0) return true;
 
-  // Sort timeline by year to match UI display order (defensive measure)
+  // Sort timeline to match UI display order
   const sortedTimeline = [...timeline].sort((a, b) => a.song.releaseYear - b.song.releaseYear);
 
-  const newCard: HipsterTimelineCard = {
-    song: newSong,
-    position: guessedPosition,
-    placedAt: Date.now(),
-  };
+  // Clamp position to valid range
+  const pos = Math.max(0, Math.min(guessedPosition, sortedTimeline.length));
 
-  // Insert at position in the sorted timeline
-  const testTimeline = [...sortedTimeline];
-  testTimeline.splice(guessedPosition, 0, newCard);
+  const newYear = newSong.releaseYear;
+  const leftYear = pos > 0 ? sortedTimeline[pos - 1].song.releaseYear : null;
+  const rightYear = pos < sortedTimeline.length ? sortedTimeline[pos].song.releaseYear : null;
 
-  // Check if timeline is in chronological order
-  for (let i = 0; i < testTimeline.length - 1; i++) {
-    const current = testTimeline[i].song.releaseYear;
-    const next = testTimeline[i + 1].song.releaseYear;
-
-    if (selectionType === 'slot') {
-      // Slot: Strict ordering required (must be strictly between years)
-      // Song 2005 placed in slot between 1998 and 2005 is WRONG (2005 >= 2005)
-      if (current >= next) return false;
-    } else {
-      // Year: Same-year allowed (clicking on a year group means "same year")
-      if (current > next) return false;
-    }
+  if (selectionType === 'slot') {
+    // Strict: new card year must be strictly between neighbors
+    if (leftYear !== null && newYear <= leftYear) return false;
+    if (rightYear !== null && newYear >= rightYear) return false;
+  } else {
+    // Year: same year allowed with neighbors
+    if (leftYear !== null && newYear < leftYear) return false;
+    if (rightYear !== null && newYear > rightYear) return false;
   }
 
   return true;
@@ -301,6 +291,29 @@ function findChronologicalPosition(timeline: HipsterTimelineCard[], year: number
     }
   }
   return sortedTimeline.length; // Insert at end
+}
+
+// Insert a card into a timeline in chronological order (mutates in place)
+function insertCardChronologically(
+  timeline: HipsterTimelineCard[],
+  newCard: HipsterTimelineCard
+): void {
+  timeline.sort((a, b) => a.song.releaseYear - b.song.releaseYear);
+  const insertPos = findChronologicalPosition(timeline, newCard.song.releaseYear);
+  timeline.splice(insertPos, 0, newCard);
+  timeline.forEach((card, idx) => { card.position = idx; });
+}
+
+// Remove a card by sorted index from a timeline (mutates in place)
+function removeCardByIndex(
+  timeline: HipsterTimelineCard[],
+  sortedIndex: number
+): HipsterTimelineCard | null {
+  timeline.sort((a, b) => a.song.releaseYear - b.song.releaseYear);
+  if (sortedIndex < 0 || sortedIndex >= timeline.length) return null;
+  const [removed] = timeline.splice(sortedIndex, 1);
+  timeline.forEach((card, idx) => { card.position = idx; });
+  return removed;
 }
 
 // Fuzzy match for bonus guess (case insensitive, 80% accuracy required)
@@ -861,16 +874,12 @@ async function handleSubmitBonus(roomCode: string, playerId: string, artist: str
   }
 
   // Now add the card to timeline (delayed from guess phase to hide album art)
-  const position = game.currentTurn.guessedPosition!;
   const newCard: HipsterTimelineCard = {
     song: game.currentTurn.song,
-    position,
+    position: 0,
     placedAt: Date.now(),
   };
-  player.timeline.splice(position, 0, newCard);
-  player.timeline.forEach((card, idx) => {
-    card.position = idx;
-  });
+  insertCardChronologically(player.timeline, newCard);
   game.usedSongs.push(game.currentTurn.song.id);
 
   // Check win condition
@@ -904,16 +913,12 @@ async function handleSkipBonus(roomCode: string, playerId: string) {
   game.currentTurn.phase = 'result';
 
   // Now add the card to timeline (delayed from guess phase to hide album art)
-  const position = game.currentTurn.guessedPosition!;
-  const newCard: HipsterTimelineCard = {
+  const skipNewCard: HipsterTimelineCard = {
     song: game.currentTurn.song,
-    position,
+    position: 0,
     placedAt: Date.now(),
   };
-  player.timeline.splice(position, 0, newCard);
-  player.timeline.forEach((card, idx) => {
-    card.position = idx;
-  });
+  insertCardChronologically(player.timeline, skipNewCard);
   game.usedSongs.push(game.currentTurn.song.id);
 
   // Check win condition
@@ -936,6 +941,12 @@ async function handleUseToken(roomCode: string, playerId: string, targetPlayerId
     return error('No es momento de usar tokens');
   }
 
+  // Prevent stealing from the active turn player during their turn
+  if (game.currentTurn && game.currentTurn.playerId === targetPlayerId &&
+      ['listening', 'guessing', 'bonus', 'intercepting'].includes(game.currentTurn.phase)) {
+    return error('No puedes robar del jugador activo durante su turno');
+  }
+
   const player = game.players.find(p => p.id === playerId);
   if (!player) return error('Jugador no encontrado');
 
@@ -950,14 +961,10 @@ async function handleUseToken(roomCode: string, playerId: string, targetPlayerId
     return error('Carta no válida');
   }
 
-  // Steal the card
-  const stolenCard = targetPlayer.timeline.splice(cardIndex, 1)[0];
-  player.timeline.push(stolenCard);
-  player.timeline.sort((a, b) => a.song.releaseYear - b.song.releaseYear);
-
-  // Update positions
-  targetPlayer.timeline.forEach((card, idx) => { card.position = idx; });
-  player.timeline.forEach((card, idx) => { card.position = idx; });
+  // Steal the card using safe helpers
+  const stolenCard = removeCardByIndex(targetPlayer.timeline, cardIndex);
+  if (!stolenCard) return error('Carta no válida');
+  insertCardChronologically(player.timeline, stolenCard);
 
   player.tokens--;
   game.lastActivity = Date.now();
@@ -1125,15 +1132,12 @@ async function handleIntercept(roomCode: string, playerId: string, position: num
 
     if (interceptCorrect) {
       // Interceptor wins! Add card to interceptor's timeline
-      // Calculate correct position for INTERCEPTOR's timeline (not turn player's)
-      const insertPosition = findChronologicalPosition(player.timeline, song.releaseYear);
       const newCard: HipsterTimelineCard = {
         song,
-        position: insertPosition,
+        position: 0,
         placedAt: Date.now(),
       };
-      player.timeline.splice(insertPosition, 0, newCard);
-      player.timeline.forEach((card, idx) => { card.position = idx; });
+      insertCardChronologically(player.timeline, newCard);
 
       game.currentTurn.interceptWinner = playerId;
       game.currentTurn.phase = 'result';
@@ -1238,15 +1242,13 @@ async function handleResolveIntercept(roomCode: string, playerId: string) {
     // Interceptor wins! Add card to interceptor's timeline
     const interceptPlayer = game.players.find(p => p.id === winningInterceptor!.playerId);
     if (interceptPlayer) {
-      // Calculate correct position for INTERCEPTOR's timeline (not current player's)
-      const insertPosition = findChronologicalPosition(interceptPlayer.timeline, song.releaseYear);
+      // Add card to interceptor's timeline chronologically
       const newCard: HipsterTimelineCard = {
         song,
-        position: insertPosition,
+        position: 0,
         placedAt: Date.now(),
       };
-      interceptPlayer.timeline.splice(insertPosition, 0, newCard);
-      interceptPlayer.timeline.forEach((card, idx) => { card.position = idx; });
+      insertCardChronologically(interceptPlayer.timeline, newCard);
 
       game.currentTurn.interceptWinner = winningInterceptor.playerId;
       game.currentTurn.phase = 'result';

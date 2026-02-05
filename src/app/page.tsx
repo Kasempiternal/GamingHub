@@ -327,7 +327,7 @@ export default function Home() {
             animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="text-white/40 text-xs font-medium">v2.13.2 - Fair Play Edition</span>
+          <span className="text-white/40 text-xs font-medium">v2.13.3 - Fair Play Edition</span>
         </motion.div>
       </motion.header>
 
